@@ -1,73 +1,131 @@
 #!/bin/bash
-# Chat2API Docker - 上游同步脚本
-# 用法: bash scripts/sync-upstream.sh
+# Chat2API Docker - 上游同步 + 构建 + 推送
+# 用法: bash scripts/sync-upstream.sh [--skip-build]
 #
-# 工作流程:
+# 完整流程:
 #   1. 拉取上游最新代码
-#   2. 将上游 main 分支 rebase 到 docker 分支
-#   3. 解决冲突（如有）
-#   4. 推送到你的 fork
+#   2. Rebase docker 分支到上游 main
+#   3. 推送到你的 Fork
+#   4. 构建 Docker 镜像
+#   5. 推送到 Docker Hub
 
 set -e
 
+DOCKER_USER="${DOCKER_USER:-movemama}"
+DOCKER_REPO="${DOCKER_REPO:-chat2api}"
+SKIP_BUILD=false
+
+# 解析参数
+if [ "$1" = "--skip-build" ]; then
+  SKIP_BUILD=true
+fi
+
+# 生成版本号 (基于日期)
+VERSION="1.$(date +%m).$(date +%d)"
+
 echo "╔══════════════════════════════════════════╗"
-echo "║   Chat2API Docker - 上游同步            ║"
+echo "║   Chat2API Docker - 同步 + 构建 + 推送  ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
-# 确保在 docker 分支
+# ==================== Step 1: 同步上游 ====================
+echo "━━━ Step 1/4: 同步上游代码 ━━━"
+
 CURRENT_BRANCH=$(git branch --show-current)
 if [ "$CURRENT_BRANCH" != "docker" ]; then
-  echo "⚠ 当前在 $CURRENT_BRANCH 分支，切换到 docker..."
+  echo "  切换到 docker 分支..."
   git checkout docker
 fi
 
-# 检查 upstream remote
 if ! git remote | grep -q upstream; then
-  echo "添加 upstream remote..."
+  echo "  添加 upstream remote..."
   git remote add upstream https://github.com/xiaoY233/Chat2API.git
 fi
 
-# 拉取上游最新代码
-echo "📥 拉取上游最新代码..."
+echo "  拉取上游最新代码..."
 git fetch upstream
 
-# 查看上游有多少新提交
-UPSTREAM_NEW=$(git log docker..upstream/main --oneline 2>/dev/null | wc -l)
+UPSTREAM_NEW=$(git log docker..upstream/main --oneline 2>/dev/null | wc -l | tr -d ' ')
 if [ "$UPSTREAM_NEW" -eq 0 ]; then
-  echo "✅ 已经是最新，无需同步"
+  echo "  ✅ 已经是最新，无需同步"
+else
+  echo "  📋 上游有 $UPSTREAM_NEW 个新提交:"
+  git log docker..upstream/main --oneline
+  echo ""
+
+  echo "  🔄 Rebase 到上游 main..."
+  if git rebase upstream/main; then
+    echo "  ✅ Rebase 成功"
+  else
+    echo ""
+    echo "  ⚠ 有冲突需要手动解决:"
+    git diff --name-only --diff-filter=U
+    echo ""
+    echo "  解决冲突后运行:"
+    echo "    git add <文件>"
+    echo "    git rebase --continue"
+    echo "    bash scripts/sync-upstream.sh"
+    exit 1
+  fi
+
+  echo "  📤 推送到 Fork..."
+  git push --force-with-lease origin docker
+  echo "  ✅ Fork 已更新"
+fi
+
+echo ""
+
+# ==================== Step 2: 构建镜像 ====================
+if [ "$SKIP_BUILD" = true ]; then
+  echo "━━━ Step 2/4: 构建镜像 (跳过) ━━━"
+  echo ""
+  echo "━━━ Step 3/4: 推送镜像 (跳过) ━━━"
+  echo ""
+  echo "━━━ Step 4/4: 重启容器 (跳过) ━━━"
+  echo ""
+  echo "✅ 同步完成 (跳过构建)"
   exit 0
 fi
 
-echo "📋 上游有 $UPSTREAM_NEW 个新提交:"
-git log docker..upstream/main --oneline
+echo "━━━ Step 2/4: 构建 Docker 镜像 ━━━"
+echo "  版本: $DOCKER_USER/$DOCKER_REPO:$VERSION"
 echo ""
 
-# Rebase docker 分支到上游 main
-echo "🔄 正在 rebase 到上游 main..."
-if git rebase upstream/main; then
-  echo "✅ Rebase 成功，无冲突"
+docker build \
+  -t $DOCKER_USER/$DOCKER_REPO:latest \
+  -t $DOCKER_USER/$DOCKER_REPO:$VERSION \
+  .
+
+echo "  ✅ 镜像构建成功"
+echo ""
+
+# ==================== Step 3: 推送镜像 ====================
+echo "━━━ Step 3/4: 推送到 Docker Hub ━━━"
+
+docker push $DOCKER_USER/$DOCKER_REPO:latest
+docker push $DOCKER_USER/$DOCKER_REPO:$VERSION
+
+echo "  ✅ 镜像已推送"
+echo ""
+
+# ==================== Step 4: 重启容器 ====================
+echo "━━━ Step 4/4: 重启容器 ━━━"
+
+if [ -f docker-compose.yml ]; then
+  docker compose up -d --force-recreate 2>/dev/null || docker-compose up -d --force-recreate 2>/dev/null || true
+  echo "  ✅ 容器已重启"
 else
-  echo ""
-  echo "⚠ 有冲突需要手动解决:"
-  echo "  1. 编辑冲突文件解决冲突"
-  echo "  2. git add <已解决的文件>"
-  echo "  3. git rebase --continue"
-  echo ""
-  echo "冲突文件:"
-  git diff --name-only --diff-filter=U
-  echo ""
-  echo "解决完冲突后，运行: git push --force-with-lease origin docker"
-  exit 1
+  echo "  ⚠ 未找到 docker-compose.yml，跳过重启"
 fi
 
-# 推送更新到 fork
-echo "📤 推送到 fork..."
-git push --force-with-lease origin docker
-
 echo ""
-echo "✅ 同步完成！"
+echo "╔══════════════════════════════════════════╗"
+echo "║            ✅ 全部完成！                 ║"
+echo "╚══════════════════════════════════════════╝"
 echo ""
-echo "下一步: 重新构建 Docker 镜像"
-echo "  docker build -t movemama/chat2api:latest ."
-echo "  docker-compose up -d --force-recreate"
+echo "  Fork:   https://github.com/$(git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/')/tree/docker"
+echo "  Docker: https://hub.docker.com/r/$DOCKER_USER/$DOCKER_REPO"
+echo "  版本:   $VERSION"
+echo "  管理:   http://localhost:18051"
+echo "  API:    http://localhost:18050"
+echo ""
