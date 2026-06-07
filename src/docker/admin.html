@@ -672,7 +672,7 @@
         { id:'perplexity', name:'Perplexity', loginUrl:'https://www.perplexity.ai', tokenKey:'cookie', tokenLabel:'Cookie',
           autoCode: `var t=document.cookie;if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Cookie sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'mimo', name:'MiMo', loginUrl:'https://mimo.xiaomi.com', tokenKey:'service_token', tokenLabel:'Service Token',
+        { id:'mimo', name:'MiMo', loginUrl:'https://aistudio.xiaomimimo.com', tokenKey:'service_token', tokenLabel:'Service Token',
           autoCode: `var t=localStorage.getItem("service_token")||document.cookie.match(/service_token=([^;]+)/)?.[1]||"";if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in - try F12 Application tab to find token key")}`
         },
         { id:'zai', name:'Z.ai', loginUrl:'https://z.ai', tokenKey:'token', tokenLabel:'JWT Token',
