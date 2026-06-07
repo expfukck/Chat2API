@@ -552,16 +552,16 @@
           <div v-if="currentGuide" class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
             <div class="flex items-center justify-between mb-2">
               <span class="font-bold text-sm text-blue-800 dark:text-blue-300">{{ t('getToken') }}</span>
-              <button @click="openProviderSite(form.providerId)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">{{ t('openSite') }} ↗</button>
+              <button @click="openProviderSite(form.providerId)" class="px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 font-bold">{{ t('openSite') }} ↗</button>
             </div>
-            <ol class="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
+            <ol class="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside mb-3">
               <li v-for="(step, i) in currentGuide.steps" :key="i">{{ step }}</li>
             </ol>
-            <div class="mt-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
-              <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{{ t('extractScript') }} ({{ t('pasteInConsole') }}):</p>
+            <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded">
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">⚡ {{ lang==='zh'?'登录后复制此脚本，粘贴到 Provider 地址栏回车 → Token 自动回填':'Copy this script after login, paste in Provider address bar → Token auto-fills' }}</p>
               <div class="flex gap-1">
-                <code class="flex-1 text-xs bg-white dark:bg-gray-800 p-1.5 rounded font-mono overflow-x-auto whitespace-nowrap">{{ currentGuide.script }}</code>
-                <button @click="copyScript()" class="px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-xs whitespace-nowrap hover:bg-gray-300">{{ t('copy') }}</button>
+                <code class="flex-1 text-xs bg-white dark:bg-gray-800 p-1.5 rounded font-mono overflow-x-auto whitespace-nowrap select-all">{{ currentGuide.script }}</code>
+                <button @click="copyScript()" class="px-2 py-1 bg-blue-600 text-white rounded text-xs whitespace-nowrap hover:bg-blue-700 font-bold">{{ t('copy') }}</button>
               </div>
             </div>
           </div>
@@ -640,90 +640,84 @@
 
       const providerGuides = [
         { id:'deepseek', name:'DeepSeek', loginUrl:'https://chat.deepseek.com', tokenKey:'userToken', tokenLabel:'User Token',
-          placeholder:'从 chat.deepseek.com 的 Local Storage 中获取 userToken',
+          placeholder:lang==='zh'?'登录后运行脚本，Token 自动回填':'Token auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 chat.deepseek.com 并登录':'Open chat.deepseek.com and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Application（应用）标签':'Switch to Application tab',
-            lang==='zh'?'左侧找到 Local Storage → chat.deepseek.com':'Find Local Storage → chat.deepseek.com',
-            lang==='zh'?'找到 userToken 字段，复制值':'Find userToken field, copy its value',
+            lang==='zh'?'点击「打开网站」登录 DeepSeek':'Click "Open Site" and login to DeepSeek',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 DeepSeek 页面地址栏粘贴并按回车':'Paste in DeepSeek address bar and press Enter',
+            lang==='zh'?'Token 将自动回填到此处 ✓':'Token will auto-fill here ✓',
           ],
-          script: `copy(JSON.parse(localStorage.getItem("ds_chat_token"))?.access_token || localStorage.getItem("userToken"))`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:(JSON.parse(localStorage.getItem("ds_chat_token")||"{}").access_token||localStorage.getItem("userToken")||"")},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'kimi', name:'Kimi', loginUrl:'https://kimi.moonshot.cn', tokenKey:'token', tokenLabel:'JWT Token',
-          placeholder:'从 Network 请求头中获取 Authorization Bearer Token',
+          placeholder:lang==='zh'?'登录后运行脚本，Token 自动回填':'Token auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 kimi.moonshot.cn 并登录':'Open kimi.moonshot.cn and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Network（网络）标签':'Switch to Network tab',
-            lang==='zh'?'刷新页面或发送一条消息':'Refresh page or send a message',
-            lang==='zh'?'找到任意 API 请求，查看 Request Headers':'Find any API request, check Request Headers',
-            lang==='zh'?'复制 Authorization 中 Bearer 后面的值':'Copy the value after Bearer in Authorization',
+            lang==='zh'?'点击「打开网站」登录 Kimi':'Click "Open Site" and login to Kimi',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 Kimi 页面地址栏粘贴并按回车':'Paste in Kimi address bar and press Enter',
+            lang==='zh'?'Token 将自动回填到此处 ✓':'Token will auto-fill here ✓',
           ],
-          script: `copy(localStorage.getItem("access_token") || document.cookie.match(/token=([^;]+)/)?.[1])`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:(localStorage.getItem("access_token")||document.cookie.match(/token=([^;]+)/)?.[1]||"")},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'glm', name:'GLM（智谱清言）', loginUrl:'https://chatglm.cn', tokenKey:'refreshToken', tokenLabel:'Refresh Token',
-          placeholder:'从 chatglm.cn 的 Local Storage 中获取 refreshToken',
+          placeholder:lang==='zh'?'登录后运行脚本，Token 自动回填':'Token auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 chatglm.cn 并登录':'Open chatglm.cn and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Application（应用）标签':'Switch to Application tab',
-            lang==='zh'?'左侧找到 Local Storage → chatglm.cn':'Find Local Storage → chatglm.cn',
-            lang==='zh'?'找到 token 或 refreshToken 字段，复制值':'Find token or refreshToken field, copy value',
+            lang==='zh'?'点击「打开网站」登录 GLM':'Click "Open Site" and login to GLM',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 GLM 页面地址栏粘贴并按回车':'Paste in GLM address bar and press Enter',
+            lang==='zh'?'Token 将自动回填到此处 ✓':'Token will auto-fill here ✓',
           ],
-          script: `copy(localStorage.getItem("refresh_token") || localStorage.getItem("token"))`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:(localStorage.getItem("refresh_token")||localStorage.getItem("token")||"")},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'qwen', name:'Qwen（通义千问）', loginUrl:'https://tongyi.aliyun.com', tokenKey:'tongyi_sso_ticket', tokenLabel:'SSO Ticket',
-          placeholder:'从 tongyi.aliyun.com 的 Cookie 中获取 tongyi_sso_ticket',
+          placeholder:lang==='zh'?'登录后运行脚本，Token 自动回填':'Token auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 tongyi.aliyun.com 并登录':'Open tongyi.aliyun.com and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Application（应用）标签':'Switch to Application tab',
-            lang==='zh'?'左侧找到 Cookies → tongyi.aliyun.com':'Find Cookies → tongyi.aliyun.com',
-            lang==='zh'?'找到 tongyi_sso_ticket 字段，复制值':'Find tongyi_sso_ticket field, copy value',
+            lang==='zh'?'点击「打开网站」登录 Qwen':'Click "Open Site" and login to Qwen',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 Qwen 页面地址栏粘贴并按回车':'Paste in Qwen address bar and press Enter',
+            lang==='zh'?'Token 将自动回填到此处 ✓':'Token will auto-fill here ✓',
           ],
-          script: `copy(document.cookie.match(/tongyi_sso_ticket=([^;]+)/)?.[1])`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:(document.cookie.match(/tongyi_sso_ticket=([^;]+)/)?.[1]||"")},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'minimax', name:'MiniMax', loginUrl:'https://chat.minimaxi.com', tokenKey:'token', tokenLabel:'JWT Token',
-          placeholder:'从 chat.minimaxi.com 的 Local Storage 中获取 token',
+          placeholder:lang==='zh'?'登录后运行脚本，Token 自动回填':'Token auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 chat.minimaxi.com 并登录':'Open chat.minimaxi.com and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Application（应用）标签':'Switch to Application tab',
-            lang==='zh'?'左侧找到 Local Storage → chat.minimaxi.com':'Find Local Storage → chat.minimaxi.com',
-            lang==='zh'?'找到 token 或 access_token 字段，复制值':'Find token or access_token field, copy value',
+            lang==='zh'?'点击「打开网站」登录 MiniMax':'Click "Open Site" and login to MiniMax',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 MiniMax 页面地址栏粘贴并按回车':'Paste in MiniMax address bar and press Enter',
+            lang==='zh'?'Token 将自动回填到此处 ✓':'Token will auto-fill here ✓',
           ],
-          script: `copy(localStorage.getItem("token") || localStorage.getItem("access_token"))`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:(localStorage.getItem("token")||localStorage.getItem("access_token")||"")},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'perplexity', name:'Perplexity', loginUrl:'https://www.perplexity.ai', tokenKey:'cookie', tokenLabel:'Cookie',
-          placeholder:'从 perplexity.ai 复制完整 Cookie',
+          placeholder:lang==='zh'?'登录后运行脚本，Cookie 自动回填':'Cookie auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 perplexity.ai 并登录':'Open perplexity.ai and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Network（网络）标签':'Switch to Network tab',
-            lang==='zh'?'刷新页面，找到任意请求':'Refresh page, find any request',
-            lang==='zh'?'复制 Request Headers 中的 Cookie 值':'Copy the Cookie value from Request Headers',
+            lang==='zh'?'点击「打开网站」登录 Perplexity':'Click "Open Site" and login to Perplexity',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 Perplexity 页面地址栏粘贴并按回车':'Paste in Perplexity address bar and press Enter',
+            lang==='zh'?'Cookie 将自动回填到此处 ✓':'Cookie will auto-fill here ✓',
           ],
-          script: `copy(document.cookie)`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:document.cookie},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'mimo', name:'MiMo', loginUrl:'https://mimo.xiaomi.com', tokenKey:'cookie', tokenLabel:'Cookie',
-          placeholder:'从 mimo.xiaomi.com 复制完整 Cookie',
+          placeholder:lang==='zh'?'登录后运行脚本，Cookie 自动回填':'Cookie auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 mimo.xiaomi.com 并登录':'Open mimo.xiaomi.com and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'在 Console 中运行下方脚本提取 Cookie':'Run the script below in Console',
+            lang==='zh'?'点击「打开网站」登录 MiMo':'Click "Open Site" and login to MiMo',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 MiMo 页面地址栏粘贴并按回车':'Paste in MiMo address bar and press Enter',
+            lang==='zh'?'Cookie 将自动回填到此处 ✓':'Cookie will auto-fill here ✓',
           ],
-          script: `copy(document.cookie)`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:document.cookie},"*"):alert("Please open this from Chat2API admin panel"))`
         },
         { id:'zai', name:'Z.ai', loginUrl:'https://z.ai', tokenKey:'token', tokenLabel:'JWT Token',
-          placeholder:'从 z.ai 获取 Token',
+          placeholder:lang==='zh'?'登录后运行脚本，Token 自动回填':'Token auto-fills after running script',
           steps: [
-            lang==='zh'?'打开 z.ai 并登录':'Open z.ai and login',
-            lang==='zh'?'按 F12 打开开发者工具':'Press F12 to open DevTools',
-            lang==='zh'?'切换到 Application 标签，找到 Local Storage':'Switch to Application tab, find Local Storage',
-            lang==='zh'?'复制 token 值':'Copy the token value',
+            lang==='zh'?'点击「打开网站」登录 Z.ai':'Click "Open Site" and login to Z.ai',
+            lang==='zh'?'登录成功后，复制下方脚本':'After login, copy the script below',
+            lang==='zh'?'在 Z.ai 页面地址栏粘贴并按回车':'Paste in Z.ai address bar and press Enter',
+            lang==='zh'?'Token 将自动回填到此处 ✓':'Token will auto-fill here ✓',
           ],
-          script: `copy(localStorage.getItem("token") || localStorage.getItem("access_token"))`
+          script: `javascript:void(window.opener?window.opener.postMessage({type:'chat2api-token',token:(localStorage.getItem("token")||localStorage.getItem("access_token")||"")},"*"):alert("Please open this from Chat2API admin panel"))`
         },
       ]
 
@@ -731,24 +725,34 @@
       function openProviderSite(id) {
         const g = providerGuides.find(p => p.id === id)
         if (g) {
-          // Open in a popup window (900x700)
           const w = 900, h = 700
           const left = (screen.width - w) / 2, top = (screen.height - h) / 2
-          const popup = window.open(g.loginUrl, 'provider_login', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`)
-          if (popup) {
-            // Monitor popup close - remind user to paste token
-            const timer = setInterval(() => {
-              if (popup.closed) {
-                clearInterval(timer)
-                // Focus back on the token input
-                const tokenInput = document.querySelector('textarea[placeholder]')
-                if (tokenInput) tokenInput.focus()
-              }
-            }, 500)
-          }
+          window.open(g.loginUrl, 'provider_login', `width=${w},height=${h},left=${left},top=${top},toolbar=yes,menubar=no,scrollbars=yes,resizable=yes`)
         }
       }
-      function copyScript() { const g = currentGuide.value; if (g) { navigator.clipboard.writeText(g.script); alert(lang.value==='zh'?'已复制到剪贴板，请在 Provider 网站的开发者工具 Console 中粘贴运行':'Copied! Paste in Provider site DevTools Console') } }
+      function copyScript() {
+        const g = currentGuide.value
+        if (g) {
+          navigator.clipboard.writeText(g.script)
+          alert(lang.value==='zh'
+            ? '脚本已复制！\n\n请在 Provider 网站登录后，将脚本粘贴到地址栏并按回车。\nToken 会自动回填到这里。'
+            : 'Script copied!\n\nPaste it in the address bar of the Provider site after login.\nToken will auto-fill here.')
+        }
+      }
+
+      // Listen for token from popup window
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'chat2api-token' && event.data.token) {
+          form.token = event.data.token
+          // Visual feedback
+          const textarea = document.querySelector('textarea')
+          if (textarea) {
+            textarea.style.borderColor = '#22c55e'
+            textarea.placeholder = lang.value==='zh' ? '✓ Token 已自动获取！填写名称后点击添加' : '✓ Token auto-filled! Enter name and click Add'
+            setTimeout(() => { textarea.style.borderColor = '' }, 3000)
+          }
+        }
+      })
 
       const dailyMax = computed(() => Math.max(1, ...dailyTrend.value.map(d=>(d.successRequests||0)+(d.failedRequests||0))))
       function barH(v, max) { return Math.max(2, (v/max)*90) }
