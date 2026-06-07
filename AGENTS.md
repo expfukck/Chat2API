@@ -631,3 +631,252 @@ supportedModels: ['GLM-5-Turbo', 'GLM-5', 'GLM-4.7', ...]
 ```
 
 **Important**: Users must restart the app after configuration updates to see the changes.
+
+---
+
+## Docker 部署方案
+
+### 概述
+
+本项目原为 Electron 桌面应用。Docker 方案通过 mock 层剥离 Electron 依赖，以纯 Node.js 服务方式运行核心代理功能，并提供 Web 管理后台。
+
+- **Docker 镜像**: `movemama/chat2api:latest`
+- **Git 分支**: `expfukck/Chat2API` → `docker` 分支
+- **上游仓库**: `xiaoY233/Chat2API` → `main` 分支
+
+### 架构
+
+```
+Docker 容器内运行:
+
+src/docker/index.ts (入口)
+    ├── electron-mock-runtime.js  → 替换 node_modules/electron/index.js
+    │   (safeStorage → AES-256-CBC, app/BrowserWindow/ipcMain → stub)
+    ├── store-mock-runtime.mjs   → 替换 node_modules/electron-store/index.js
+    │   (JSON 文件读写替代 electron-store)
+    ├── ProxyServer (Koa)        → 原始 src/main/proxy/server.ts（未修改）
+    │   └── 端口 18050: /v1/chat/completions, /v1/models, /health
+    ├── Admin HTTP Server        → Node.js http.createServer
+    │   ├── 端口 18051: admin.html (Vue3 SPA 管理后台)
+    │   ├── /api/* → extendedApi.ts (扩展 API)
+    │   └── /auth/callback → Token 回调页面
+    └── Management API           → 原始 /v0/management/* (自动启用)
+```
+
+### Docker 相关文件
+
+#### 新增文件（不会与上游冲突）
+
+| 文件 | 说明 |
+|------|------|
+| `Dockerfile` | 两阶段构建：electron-vite 编译 + tsx 运行时 |
+| `docker-compose.yml` | 一键部署配置 |
+| `.dockerignore` | 构建排除规则 |
+| `DOCKER.md` | 完整部署文档（中文） |
+| `docker-config.example.json` | 配置文件示例 |
+| `scripts/sync-upstream.sh` | 上游同步+构建+推送一键脚本 |
+| `src/docker/index.ts` | Docker 入口（启动代理+管理后台） |
+| `src/docker/extendedApi.ts` | 扩展 API（提示词、模型、数据导出等 15+ 端点） |
+| `src/docker/admin.html` | Web 管理后台（Vue3 + Tailwind，11 页面） |
+| `src/docker/electron-mock-runtime.js` | Electron API 模拟（CJS） |
+| `src/docker/electron-hook.js` | 模块拦截器（CJS） |
+| `src/docker/store-mock-runtime.mjs` | electron-store 替代（ESM） |
+| `src/docker/store-mock-runtime.js` | electron-store 替代（CJS） |
+| `src/docker/index.js` | CJS 入口（备用） |
+
+#### 修改文件（上游更新时可能冲突）
+
+| 文件 | 改动 | 冲突概率 |
+|------|------|:---:|
+| `electron.vite.config.ts` | 从 exclude 列表移除 `electron-store` 和 `electron-updater`（使其外部化） | 低 |
+| `.gitignore` | 添加 `!src/docker/*.js` 例外（允许提交 Docker JS 文件） | 极低 |
+
+### 端口说明
+
+| 端口 | 用途 |
+|------|------|
+| `18050` | OpenAI 兼容 API + Management API |
+| `18051` | Web 管理后台 + 扩展 API + Token 回调 |
+
+### 数据持久化
+
+```yaml
+volumes:
+  - ./data:/root/.chat2api    # bind mount 到宿主机
+```
+
+数据结构：
+```
+./data/
+├── data.json                 # 配置、账号、Provider、API Key
+├── logs/                     # 应用日志
+│   └── app-logs.ndjson
+└── request-logs/             # 请求日志
+    └── request-logs.ndjson
+```
+
+### 构建与部署
+
+```bash
+# 构建
+docker build -t movemama/chat2api:latest .
+
+# 运行
+docker compose up -d
+
+# 一键同步上游 + 构建 + 推送
+bash scripts/sync-upstream.sh
+
+# 只同步不构建
+bash scripts/sync-upstream.sh --skip-build
+```
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `CHAT2API_PORT` | `18050` | API 监听端口 |
+| `CHAT2API_HOST` | `0.0.0.0` | 监听地址 |
+| `CHAT2API_ADMIN_PORT` | `18051` | 管理后台端口 |
+| `CHAT2API_LOG_LEVEL` | `info` | 日志级别 |
+| `CHAT2API_MANAGEMENT_SECRET` | 自动生成 | Management API 密钥 |
+| `CHAT2API_CONFIG_PATH` | `~/.chat2api/docker-config.json` | 初始配置文件路径 |
+
+---
+
+## ⚠️ 关键注意点
+
+### 1. Provider 凭证字段名（CRITICAL）
+
+**Docker 管理后台存储的字段名必须与适配器读取的字段名完全一致**，否则 Token 找不到，请求会失败。
+
+| Provider | 适配器读取 (`credentials.X`) | 管理后台存储字段 | 匹配 |
+|----------|------------------------------|-----------------|:---:|
+| DeepSeek | `token` \|\| `apiKey` \|\| `refreshToken` | `token` | ✅ |
+| GLM | `refresh_token` \|\| `token` | `refresh_token` | ✅ |
+| Kimi | `token` \|\| `refreshToken` | `token` | ✅ |
+| Qwen | `ticket` \|\| `tongyi_sso_ticket` | `ticket` | ✅ |
+| MiniMax | `token` (+ `realUserID` 可选) | `token` + `realUserID` | ✅ |
+| Perplexity | `sessionToken` \|\| `cookie` \|\| `token` | `cookie` | ✅ |
+| MiMo | `service_token` + `user_id` + `ph_token` | `service_token` + `user_id` + `ph_token` | ✅ |
+| Z.ai | `token` (+ `captcha_verify_param` 可选) | `token` + `captcha_verify_param` | ✅ |
+
+**检查方法**：查看 `src/main/proxy/adapters/<provider>.ts` 中的 `credentials.X` 访问方式。
+
+**历史教训**：曾将 DeepSeek 存为 `userToken`、GLM 存为 `refreshToken`、MiMo 存为 `cookie`，导致适配器读取不到 Token，请求全部失败。
+
+### 2. Provider 登录网址
+
+管理后台「打开网站」按钮使用的 URL 必须与源码 OAuth 适配器中的一致：
+
+| Provider | 正确 URL | 错误 URL |
+|----------|----------|----------|
+| MiMo | `https://aistudio.xiaomimimo.com` | ~~`https://mimo.xiaomi.com`~~ |
+
+**检查方法**：查看 `src/main/oauth/adapters/<provider>.ts` 中的 `loginUrl`。
+
+### 3. electron.vite.config.ts 修改
+
+Docker 模式下 `electron-store` 和 `electron-updater` **必须外部化**（不能 bundle 进输出文件），因为它们在运行时由我们的 mock 替代：
+
+```typescript
+externalizeDepsPlugin({
+  exclude: [
+    'axios', '@koa/router', 'koa', 'koa-bodyparser', 'koa-router',
+    'eventsource-parser', 'js-sha3', 'mime-types', 'zstd-codec'
+    // ⚠️ 不要在这里放 electron-store 和 electron-updater
+  ]
+})
+```
+
+### 4. .gitignore 例外
+
+`src/docker/` 下的 `.js` 文件是运行时 mock 文件，**必须提交到 Git**：
+
+```gitignore
+src/**/*.js          # 排除所有 src 下的 JS（TS 编译产物）
+!src/docker/*.js     # 例外：Docker 运行时 JS 文件需要提交
+```
+
+### 5. 日志配置
+
+Docker 模式默认增强日志配置：
+- 请求日志保留量：**2000 条**（源码默认 200 条）
+- 请求/响应内容记录：**开启**（源码默认关闭）
+- 敏感数据脱敏：**开启**
+
+### 6. Token 提取脚本
+
+管理后台的 Token 提取脚本使用 `window.opener.postMessage()` 将 Token 从 Provider 弹窗回传到管理后台。关键限制：
+- 浏览器同源策略阻止直接读取跨域 localStorage
+- `navigator.clipboard` 在非 HTTPS 环境下不可用，需 fallback 到 `execCommand('copy')`
+- `javascript:` 前缀在地址栏粘贴时会被浏览器吞掉，因此改用 F12 Console 方式
+
+### 7. 测试账号功能
+
+测试按钮会遍历该 Provider 的所有可用模型发送测试请求：
+1. 获取 effective models → model mappings → 默认模型列表
+2. 逐个模型发送 `"Hi"` 测试请求
+3. 遇到 404 跳过，试下一个
+4. **任一模型成功 = 账号正常**
+5. 全部失败 = 显示最后一个错误
+
+### 8. 上游同步冲突处理
+
+```bash
+# 如果 rebase 遇到冲突
+git status                    # 查看冲突文件
+vim <冲突文件>                 # 解决冲突
+git add <已解决文件>
+git rebase --continue
+bash scripts/sync-upstream.sh  # 继续完成构建推送
+```
+
+最可能的冲突文件是 `electron.vite.config.ts`，解决方式：确保 `electron-store` 和 `electron-updater` 不在 `exclude` 列表中。
+
+---
+
+## Docker 管理后台功能清单
+
+### 11 个页面
+
+| 页面 | 功能 |
+|------|------|
+| 📊 仪表盘 | 服务状态、请求统计、每日趋势图、Provider 状态网格、代理控制 |
+| 🏢 服务商 | 所有 Provider 卡片列表、启用/禁用切换、账号数统计 |
+| 👤 账号管理 | 增删改查、验证凭证、清除 Provider 端聊天记录、测试可用性 |
+| 🧩 模型管理 | 有效模型列表、添加/移除自定义模型 |
+| 🔀 模型映射 | 请求模型→实际模型映射 CRUD |
+| 💬 系统提示词 | 自定义提示词 CRUD、内置提示词查看 |
+| 🔑 API 密钥 | 创建/删除、显示/隐藏、复制、启用/禁用 |
+| 🗂️ 会话管理 | 会话列表、消息详情、删除/清空 |
+| 📋 请求日志 | 卡片式详情、用户输入、AI 响应、错误信息、完整 body 展开 |
+| 📝 系统日志 | 按级别筛选、时间排序 |
+| ⚙️ 设置 | 上下文管理、工具调用、负载均衡、日志级别、数据导出/导入/清空 |
+
+### 全局功能
+- 深色模式 🌙
+- 中英文切换 🌐
+- F12 Console Token 提取 + postMessage 自动回填
+
+---
+
+## 版本历史
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1.9.1 | 2026-06-07 | 测试遍历所有模型，任一成功即通过 |
+| 1.9.0 | 2026-06-07 | 多字段凭证（MiMo 3 字段）、账号测试按钮 |
+| 1.8.3 | 2026-06-07 | 修复 MiMo 登录网址 |
+| 1.8.2 | 2026-06-07 | 修复 DeepSeek/GLM/MiMo/Qwen 凭证字段名 |
+| 1.8.1 | 2026-06-07 | 简化为 2 步添加账号、postMessage 自动回填 |
+| 1.8.0 | 2026-06-07 | 书签一键 Token 提取 |
+| 1.7.1 | 2026-06-07 | 修复复制功能、改用 F12 Console 方式 |
+| 1.7.0 | 2026-06-07 | OAuth 回调重定向流程 |
+| 1.6.3 | 2026-06-07 | postMessage Token 自动回填 |
+| 1.6.2 | 2026-06-07 | Provider 弹窗登录 + API Key 显示/复制/启用禁用 |
+| 1.6.1 | 2026-06-07 | 增强添加账号引导 + Token 提取脚本 |
+| 1.6.0 | 2026-06-07 | Provider 管理、模型映射、数据导出导入、清除聊天 |
+| 1.5.1 | 2026-06-07 | 请求日志增强（2000 条、含 body） |
+| 1.5.0 | 2026-06-07 | 完整管理后台 9 页面 + 深色模式 + i18n |
+| 1.4.0 | 2026-06-07 | 初始 Docker 版本 |
