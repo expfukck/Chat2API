@@ -136,6 +136,47 @@ async function main(): Promise<void> {
       const { handleExtendedApi } = require('./extendedApi')
       const adminServer = createServer(async (req, res) => {
         const url = req.url || ''
+        // Auth callback - receives token from provider site redirect
+        if (url.startsWith('/auth/callback')) {
+          const callbackHtml = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Chat2API - Token 获取成功</title>
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f0fdf4}
+.box{background:white;padding:40px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);text-align:center;max-width:400px}
+.icon{font-size:48px;margin-bottom:16px}h2{color:#16a34a;margin:0 0 8px}p{color:#666;font-size:14px}
+.token{background:#f1f5f9;padding:8px 12px;border-radius:6px;font-family:monospace;font-size:12px;word-break:break-all;margin:12px 0;max-height:80px;overflow:auto}
+.btn{display:inline-block;margin-top:12px;padding:8px 24px;background:#2563eb;color:white;border-radius:6px;text-decoration:none;font-size:14px}</style>
+</head><body><div class="box">
+<div class="icon">✅</div>
+<h2>Token 获取成功！</h2>
+<p>正在自动返回管理后台...</p>
+<div class="token" id="t"></div>
+<p id="status" style="color:#999;font-size:12px">如果未自动关闭，请手动关闭此窗口</p>
+<a class="btn" href="/" onclick="return closeAndReturn()">返回管理后台</a>
+</div>
+<script>
+var params = new URLSearchParams(location.search);
+var token = params.get('token') || '';
+var provider = params.get('provider') || '';
+document.getElementById('t').textContent = token ? token.substring(0,60) + (token.length>60?'...':'') : '(empty)';
+function closeAndReturn() {
+  if (window.opener) {
+    window.opener.postMessage({type:'chat2api-token',token:token,provider:provider}, '*');
+    window.close();
+  }
+  return false;
+}
+// Auto send token and close after 1.5s
+setTimeout(function() {
+  if (window.opener && token) {
+    window.opener.postMessage({type:'chat2api-token',token:token,provider:provider}, '*');
+    try { window.close(); } catch(e) {}
+  }
+}, 1500);
+</script></body></html>`
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+          res.end(callbackHtml)
+          return
+        }
         // Extended API routes
         if (url.startsWith('/api/')) {
           req.url = url.replace('/api', '')
