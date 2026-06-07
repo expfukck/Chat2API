@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh-CN" :class="{ dark: darkMode }">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat2API 管理后台</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <style>
+    [v-cloak] { display: none; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    .bar { transition: height 0.3s ease; }
+    .modal-mask { background: rgba(0,0,0,0.5); }
+    pre { white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+  <div id="app" v-cloak>
+    <!-- 登录页 -->
+    <div v-if="!authenticated" class="min-h-screen flex items-center justify-center">
+      <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-96">
+        <h1 class="text-2xl font-bold mb-2 text-center dark:text-white">Chat2API</h1>
+        <p class="text-sm text-gray-400 mb-6 text-center">{{ t('subtitle') }}</p>
+        <form @submit.prevent="login">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ t('secret') }}</label>
+            <input v-model="secret" type="password" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500" placeholder="mgmt_xxx..." required>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ t('apiBase') }}</label>
+            <input v-model="apiBase" type="text" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500">
+          </div>
+          <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">{{ t('login') }}</button>
+          <p v-if="loginError" class="text-red-500 text-sm mt-2">{{ loginError }}</p>
+        </form>
+        <div class="mt-4 flex justify-center gap-2">
+          <button @click="lang='zh'" :class="lang==='zh'?'text-blue-600':'text-gray-400'" class="text-sm">中文</button>
+          <button @click="lang='en'" :class="lang==='en'?'text-blue-600':'text-gray-400'" class="text-sm">English</button>
+          <button @click="darkMode=!darkMode" class="text-sm text-gray-400">{{ darkMode ? '☀️' : '🌙' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div v-else class="flex">
+      <!-- 侧边栏 -->
+      <div class="fixed left-0 top-0 h-full w-52 bg-gray-800 dark:bg-gray-950 text-white flex flex-col">
+        <div class="p-4 border-b border-gray-700">
+          <h1 class="text-lg font-bold">Chat2API</h1>
+          <p class="text-xs text-gray-400">{{ t('subtitle') }}</p>
+        </div>
+        <nav class="flex-1 p-2 overflow-y-auto">
+          <button v-for="item in navItems" :key="item.key" @click="switchPage(item.key)"
+            :class="['w-full text-left px-3 py-2 rounded-md mb-1 text-sm transition', currentPage===item.key?'bg-blue-600':'hover:bg-gray-700']">
+            {{ item.icon }} {{ t(item.key) }}
+          </button>
+        </nav>
+        <div class="p-3 border-t border-gray-700 flex gap-2">
+          <button @click="lang=lang==='zh'?'en':'zh'" class="flex-1 text-xs text-gray-400 hover:text-white py-1 border border-gray-600 rounded">{{ lang==='zh'?'EN':'中' }}</button>
+          <button @click="darkMode=!darkMode" class="flex-1 text-xs text-gray-400 hover:text-white py-1 border border-gray-600 rounded">{{ darkMode?'☀️':'🌙' }}</button>
+          <button @click="logout" class="flex-1 text-xs text-gray-400 hover:text-white py-1 border border-gray-600 rounded">{{ t('logout') }}</button>
+        </div>
+      </div>
+
+      <!-- 主内容 -->
+      <div class="ml-52 flex-1 p-6">
+        <!-- 仪表盘 -->
+        <div v-if="currentPage==='dashboard'">
+          <h2 class="text-xl font-bold mb-4 dark:text-white">{{ t('dashboard') }}</h2>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('status') }}</p>
+              <p :class="['text-xl font-bold', health.proxy?.isRunning?'text-green-500':'text-red-500']">{{ health.proxy?.isRunning?t('running'):t('stopped') }}</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('port') }}</p>
+              <p class="text-xl font-bold dark:text-white">{{ health.proxy?.port||'-' }}</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('uptime') }}</p>
+              <p class="text-xl font-bold dark:text-white">{{ formatUptime(health.proxy?.uptime) }}</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('connections') }}</p>
+              <p class="text-xl font-bold dark:text-white">{{ health.proxy?.connections||0 }}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('totalRequests') }}</p>
+              <p class="text-2xl font-bold dark:text-white">{{ stats.totalRequests||0 }}</p>
+              <p class="text-xs text-gray-400 mt-1">{{ t('today') }}: {{ todayStats.totalRequests||0 }}</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('successRate') }}</p>
+              <p class="text-2xl font-bold text-green-500">{{ stats.totalRequests?Math.round((stats.successRequests/stats.totalRequests)*100):0 }}%</p>
+              <p class="text-xs text-gray-400 mt-1">{{ t('today') }}: {{ todayStats.totalRequests?Math.round(((todayStats.successRequests||0)/todayStats.totalRequests)*100):0 }}%</p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('avgLatency') }}</p>
+              <p class="text-2xl font-bold dark:text-white">{{ Math.round(stats.avgLatency||0) }}ms</p>
+            </div>
+          </div>
+          <!-- 服务商状态 -->
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+            <h3 class="font-bold mb-3 dark:text-white text-sm">{{ t('providerStatus') }}</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div v-for="p in allProviders" :key="p.id" class="p-2 rounded border dark:border-gray-600 flex items-center gap-2">
+                <span :class="['w-2 h-2 rounded-full', p.enabled?'bg-green-500':'bg-gray-400']"></span>
+                <span class="text-xs dark:text-gray-300 flex-1">{{ providerNames[p.id]||p.id }}</span>
+                <span class="text-xs text-gray-400">{{ getAccountCount(p.id) }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- 每日趋势 -->
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+            <h3 class="font-bold mb-3 dark:text-white text-sm">{{ t('dailyTrend') }}</h3>
+            <div class="flex items-end gap-1 h-32">
+              <div v-for="(d,i) in dailyTrend" :key="i" class="flex-1 flex flex-col items-center">
+                <div class="w-full flex gap-0.5 items-end justify-center" style="height:100px">
+                  <div class="bar bg-green-400 rounded-t w-3" :style="{height: barH(d.successRequests, dailyMax)+'px'}"></div>
+                  <div class="bar bg-red-400 rounded-t w-3" :style="{height: barH(d.failedRequests||0, dailyMax)+'px'}"></div>
+                </div>
+                <span class="text-xs text-gray-400 mt-1">{{ d.date?.slice(5) }}</span>
+              </div>
+            </div>
+            <div class="flex gap-4 mt-2 text-xs text-gray-400"><span class="flex items-center gap-1"><span class="w-2 h-2 bg-green-400 rounded"></span>{{ t('success') }}</span><span class="flex items-center gap-1"><span class="w-2 h-2 bg-red-400 rounded"></span>{{ t('failed') }}</span></div>
+          </div>
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+            <h3 class="font-bold mb-3 dark:text-white text-sm">{{ t('proxyControl') }}</h3>
+            <div class="flex gap-2">
+              <button @click="proxyAction('start')" class="px-4 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700">{{ t('start') }}</button>
+              <button @click="proxyAction('stop')" class="px-4 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">{{ t('stop') }}</button>
+              <button @click="proxyAction('restart')" class="px-4 py-1.5 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700">{{ t('restart') }}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 服务商管理 -->
+        <div v-if="currentPage==='providers'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('providers') }}</h2>
+            <button @click="loadAllProviders()" class="px-3 py-1.5 bg-gray-600 text-white rounded text-sm">{{ t('refresh') }}</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div v-for="p in allProviders" :key="p.id" class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <span class="font-bold dark:text-white">{{ providerNames[p.id]||p.id }}</span>
+                  <span :class="['ml-2 px-2 py-0.5 rounded text-xs', p.enabled?'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300']">{{ p.enabled?t('enabled2'):t('disabled2') }}</span>
+                </div>
+                <button @click="toggleProvider(p.id)" :class="['px-2 py-1 rounded text-xs', p.enabled?'bg-red-100 text-red-600 hover:bg-red-200':'bg-green-100 text-green-600 hover:bg-green-200']">{{ p.enabled?t('disable'):t('enable') }}</button>
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                <div>{{ t('type') }}: {{ p.authType||'-' }}</div>
+                <div>{{ t('accountCount') }}: {{ getAccountCount(p.id) }}</div>
+                <div class="font-mono">{{ p.apiEndpoint||'-' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 账号管理 -->
+        <div v-if="currentPage==='accounts'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('accounts') }}</h2>
+            <button @click="openModal('addAccount')" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">+ {{ t('add') }}</button>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 dark:bg-gray-700"><tr>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('name') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('provider') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('status') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('actions') }}</th>
+              </tr></thead>
+              <tbody class="divide-y dark:divide-gray-700">
+                <tr v-for="a in accounts" :key="a.id" class="dark:text-gray-300">
+                  <td class="px-3 py-2">{{ a.name }}</td>
+                  <td class="px-3 py-2"><span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-600 rounded text-xs">{{ providerNames[a.providerId]||a.providerId }}</span></td>
+                  <td class="px-3 py-2"><span :class="['px-2 py-0.5 rounded text-xs', a.status==='active'?'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300']">{{ statusText(a.status) }}</span></td>
+                  <td class="px-3 py-2 flex gap-2 flex-wrap">
+                    <button @click="validateAccount(a.id)" class="text-blue-500 hover:text-blue-700 text-xs">{{ t('validate') }}</button>
+                    <button @click="clearAccountChats(a.id)" class="text-yellow-600 hover:text-yellow-800 text-xs">{{ t('clearChats') }}</button>
+                    <button @click="deleteAccount(a.id)" class="text-red-500 hover:text-red-700 text-xs">{{ t('delete') }}</button>
+                  </td>
+                </tr>
+                <tr v-if="!accounts.length"><td colspan="4" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 模型管理 -->
+        <div v-if="currentPage==='models'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('models') }}</h2>
+            <select v-model="selectedProvider" @change="loadModels()" class="px-3 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm">
+              <option v-for="p in providers" :key="p.id" :value="p.id">{{ providerNames[p.id]||p.id }}</option>
+            </select>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 dark:bg-gray-700"><tr>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('displayName') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('actualModel') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('type') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('actions') }}</th>
+              </tr></thead>
+              <tbody class="divide-y dark:divide-gray-700">
+                <tr v-for="m in effectiveModels" :key="m.displayName" class="dark:text-gray-300">
+                  <td class="px-3 py-2">{{ m.displayName }}</td>
+                  <td class="px-3 py-2 font-mono text-xs">{{ m.actualModelId }}</td>
+                  <td class="px-3 py-2"><span :class="['px-2 py-0.5 rounded text-xs', m.isCustom?'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300':'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300']">{{ m.isCustom?t('custom'):t('builtIn') }}</span></td>
+                  <td class="px-3 py-2"><button @click="removeModel(m.displayName)" class="text-red-500 hover:text-red-700 text-xs">{{ t('remove') }}</button></td>
+                </tr>
+                <tr v-if="!effectiveModels.length"><td colspan="4" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+            <h3 class="font-bold mb-3 dark:text-white text-sm">{{ t('addCustomModel') }}</h3>
+            <div class="flex gap-2">
+              <input v-model="newModel.displayName" :placeholder="t('displayName')" class="px-3 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm flex-1">
+              <input v-model="newModel.actualModelId" :placeholder="t('actualModel')" class="px-3 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm flex-1">
+              <button @click="addModel()" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm">{{ t('add') }}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 模型映射 -->
+        <div v-if="currentPage==='mappings'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('mappings') }}</h2>
+            <button @click="openModal('addMapping')" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">+ {{ t('addMapping') }}</button>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 dark:bg-gray-700"><tr>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('requestModel') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('mapTo') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('provider') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('actions') }}</th>
+              </tr></thead>
+              <tbody class="divide-y dark:divide-gray-700">
+                <tr v-for="(m,key) in modelMappings" :key="key" class="dark:text-gray-300">
+                  <td class="px-3 py-2 font-mono text-xs">{{ m.requestModel }}</td>
+                  <td class="px-3 py-2 font-mono text-xs">{{ m.actualModel }}</td>
+                  <td class="px-3 py-2 text-xs">{{ providerNames[m.providerId]||m.providerId||'-' }}</td>
+                  <td class="px-3 py-2"><button @click="deleteMapping(m.requestModel)" class="text-red-500 text-xs">{{ t('delete') }}</button></td>
+                </tr>
+                <tr v-if="!Object.keys(modelMappings).length"><td colspan="4" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 系统提示词 -->
+        <div v-if="currentPage==='prompts'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('prompts') }}</h2>
+            <button @click="openModal('addPrompt')" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">+ {{ t('add') }}</button>
+          </div>
+          <div class="space-y-2">
+            <div v-for="p in prompts" :key="p.id" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+              <div class="flex justify-between items-start">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold dark:text-white text-sm">{{ p.name }}</span>
+                    <span :class="['px-2 py-0.5 rounded text-xs', p.isBuiltin?'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300':'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300']">{{ p.isBuiltin?t('builtIn'):t('custom') }}</span>
+                  </div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ p.description||'-' }}</p>
+                  <pre class="text-xs text-gray-600 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700 p-2 rounded max-h-24 overflow-y-auto">{{ p.content?.substring(0,200) }}{{ p.content?.length>200?'...':'' }}</pre>
+                </div>
+                <div class="flex gap-2 ml-4">
+                  <button v-if="!p.isBuiltin" @click="editPrompt(p)" class="text-blue-500 text-xs">{{ t('edit') }}</button>
+                  <button v-if="!p.isBuiltin" @click="deletePrompt(p.id)" class="text-red-500 text-xs">{{ t('delete') }}</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="!prompts.length" class="text-center text-gray-400 py-8">{{ t('noData') }}</div>
+          </div>
+        </div>
+
+        <!-- API 密钥 -->
+        <div v-if="currentPage==='apikeys'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('apikeys') }}</h2>
+            <button @click="createApiKey()" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">+ {{ t('create') }}</button>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 dark:bg-gray-700"><tr>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('name') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('key') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('usage') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('actions') }}</th>
+              </tr></thead>
+              <tbody class="divide-y dark:divide-gray-700">
+                <tr v-for="k in apiKeys" :key="k.id" class="dark:text-gray-300">
+                  <td class="px-3 py-2">{{ k.name }}</td>
+                  <td class="px-3 py-2 font-mono text-xs">{{ k.key?.substring(0,24) }}...</td>
+                  <td class="px-3 py-2">{{ k.usageCount||0 }}</td>
+                  <td class="px-3 py-2"><button @click="deleteApiKey(k.id)" class="text-red-500 text-xs">{{ t('delete') }}</button></td>
+                </tr>
+                <tr v-if="!apiKeys.length"><td colspan="4" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 会话管理 -->
+        <div v-if="currentPage==='sessions'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('sessions') }}</h2>
+            <button @click="clearSessions()" class="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">{{ t('clearAll') }}</button>
+          </div>
+          <div class="space-y-2">
+            <div v-for="s in sessions" :key="s.id" @click="viewSession(s.id)" class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow cursor-pointer hover:ring-1 hover:ring-blue-400">
+              <div class="flex justify-between items-center">
+                <div>
+                  <span class="font-bold dark:text-white text-sm">{{ s.id?.substring(0,12) }}...</span>
+                  <span class="ml-2 text-xs text-gray-400">{{ s.providerId }} / {{ s.accountId?.substring(0,8) }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-gray-400">{{ s.messages?.length||0 }} {{ t('messages') }}</span>
+                  <span :class="['px-2 py-0.5 rounded text-xs', s.status==='active'?'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300']">{{ s.status==='active'?t('active'):t('expired') }}</span>
+                  <button @click.stop="deleteSession(s.id)" class="text-red-500 text-xs">{{ t('delete') }}</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="!sessions.length" class="text-center text-gray-400 py-8">{{ t('noData') }}</div>
+          </div>
+        </div>
+
+        <!-- 请求日志 -->
+        <div v-if="currentPage==='requestLogs'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('requestLogs') }}</h2>
+            <div class="flex gap-2">
+              <select v-model="reqLogFilter" @change="loadRequestLogs()" class="px-2 py-1 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm">
+                <option value="">{{ t('all') }}</option>
+                <option value="success">{{ t('success') }}</option>
+                <option value="error">{{ t('failed') }}</option>
+              </select>
+              <button @click="loadRequestLogs()" class="px-3 py-1.5 bg-gray-600 text-white rounded text-sm">{{ t('refresh') }}</button>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div v-for="r in requestLogs" :key="r.id" class="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+              <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span :class="['px-2 py-0.5 rounded text-xs font-medium', r.status==='success'?'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300']">{{ r.status==='success'?'✓ '+t('success'):'✗ '+t('failed') }}</span>
+                  <span class="text-xs font-mono dark:text-gray-300">{{ r.model||'-' }}</span>
+                  <span v-if="r.actualModel&&r.actualModel!==r.model" class="text-xs text-gray-400">→ {{ r.actualModel }}</span>
+                  <span v-if="r.isStream" class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 rounded text-xs">Stream</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-gray-400">
+                  <span>{{ r.latency||0 }}ms</span>
+                  <span>{{ r.statusCode||'-' }}</span>
+                  <span>{{ formatTime(r.timestamp) }}</span>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                <div class="text-gray-500 dark:text-gray-400">{{ t('provider') }}: <span class="dark:text-gray-300">{{ providerNames[r.providerId]||r.providerId||'-' }}</span></div>
+                <div class="text-gray-500 dark:text-gray-400">{{ t('account') }}: <span class="dark:text-gray-300">{{ r.accountName||r.accountId?.substring(0,10)||'-' }}</span></div>
+              </div>
+              <div v-if="r.userInput" class="mb-2">
+                <p class="text-xs text-gray-400 mb-1">{{ t('userInput') }}:</p>
+                <pre class="text-xs bg-gray-50 dark:bg-gray-700 dark:text-gray-300 p-2 rounded max-h-20 overflow-y-auto">{{ r.userInput }}</pre>
+              </div>
+              <div v-if="r.responsePreview" class="mb-2">
+                <p class="text-xs text-gray-400 mb-1">{{ t('response') }}:</p>
+                <pre class="text-xs bg-gray-50 dark:bg-gray-700 dark:text-gray-300 p-2 rounded max-h-20 overflow-y-auto">{{ r.responsePreview }}</pre>
+              </div>
+              <div v-if="r.errorMessage" class="mb-2">
+                <p class="text-xs text-red-400 mb-1">{{ t('error') }}:</p>
+                <pre class="text-xs bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 p-2 rounded max-h-20 overflow-y-auto">{{ r.errorMessage }}</pre>
+              </div>
+              <div v-if="r.requestBody||r.responseBody" class="mb-2">
+                <button @click="r._expanded=!r._expanded" class="text-xs text-blue-500 hover:text-blue-700">{{ r._expanded?t('collapse'):t('expandBody') }}</button>
+                <div v-if="r._expanded">
+                  <div v-if="r.requestBody" class="mt-1">
+                    <p class="text-xs text-gray-400 mb-1">Request Body:</p>
+                    <pre class="text-xs bg-gray-50 dark:bg-gray-700 dark:text-gray-300 p-2 rounded max-h-40 overflow-y-auto">{{ r.requestBody }}</pre>
+                  </div>
+                  <div v-if="r.responseBody" class="mt-1">
+                    <p class="text-xs text-gray-400 mb-1">Response Body:</p>
+                    <pre class="text-xs bg-gray-50 dark:bg-gray-700 dark:text-gray-300 p-2 rounded max-h-40 overflow-y-auto">{{ r.responseBody }}</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-if="!requestLogs.length" class="text-center text-gray-400 py-8">{{ t('noData') }}</div>
+          </div>
+        </div>
+
+        <!-- 设置 -->
+        <div v-if="currentPage==='settings'">
+          <h2 class="text-xl font-bold mb-4 dark:text-white">{{ t('settings') }}</h2>
+          <!-- 上下文管理 -->
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-bold dark:text-white text-sm">{{ t('contextMgmt') }}</h3>
+              <label class="flex items-center gap-2 text-sm dark:text-gray-300"><input type="checkbox" v-model="settingsConfig.contextManagement.enabled" @change="saveSettings()"> {{ t('enabled') }}</label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('strategy') }}</label>
+                <select v-model="settingsConfig.contextManagement.strategy" @change="saveSettings()" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+                  <option value="slidingWindow">{{ t('slidingWindow') }}</option>
+                  <option value="tokenLimit">{{ t('tokenLimit') }}</option>
+                  <option value="summary">{{ t('summary') }}</option>
+                </select>
+              </div>
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('maxMessages') }}</label>
+                <input v-model.number="settingsConfig.contextManagement.maxMessages" @change="saveSettings()" type="number" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+              </div>
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('maxTokens') }}</label>
+                <input v-model.number="settingsConfig.contextManagement.maxTokens" @change="saveSettings()" type="number" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+              </div>
+            </div>
+          </div>
+          <!-- 工具调用 -->
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-bold dark:text-white text-sm">{{ t('toolCalling') }}</h3>
+              <label class="flex items-center gap-2 text-sm dark:text-gray-300"><input type="checkbox" v-model="settingsConfig.toolCallingConfig.enabled" @change="saveSettings()"> {{ t('enabled') }}</label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('mode') }}</label>
+                <select v-model="settingsConfig.toolCallingConfig.mode" @change="saveSettings()" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+                  <option value="off">{{ t('off') }}</option>
+                  <option value="auto">{{ t('auto') }}</option>
+                  <option value="force">{{ t('force') }}</option>
+                </select>
+              </div>
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('clientAdapter') }}</label>
+                <select v-model="settingsConfig.toolCallingConfig.clientAdapterId" @change="saveSettings()" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+                  <option value="standard-openai-tools">OpenAI Tools</option>
+                  <option value="cherry-studio-mcp">Cherry Studio MCP</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <!-- 其他设置 -->
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+            <h3 class="font-bold mb-3 dark:text-white text-sm">{{ t('otherSettings') }}</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('loadBalance') }}</label>
+                <select v-model="settingsConfig.loadBalanceStrategy" @change="saveSettings()" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+                  <option value="round_robin">{{ t('roundRobin') }}</option>
+                  <option value="fill_first">{{ t('fillFirst') }}</option>
+                  <option value="failover">{{ t('failover') }}</option>
+                </select>
+              </div>
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('logLevel') }}</label>
+                <select v-model="settingsConfig.logLevel" @change="saveSettings()" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+                  <option value="debug">Debug</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warn</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('requestTimeout') }} (ms)</label>
+                <input v-model.number="settingsConfig.requestTimeout" @change="saveSettings()" type="number" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+              </div>
+              <div><label class="text-xs text-gray-500 dark:text-gray-400">{{ t('retryCount') }}</label>
+                <input v-model.number="settingsConfig.retryCount" @change="saveSettings()" type="number" class="w-full px-2 py-1.5 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm mt-1">
+              </div>
+            </div>
+          </div>
+          <!-- 数据管理 -->
+          <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+            <h3 class="font-bold mb-3 dark:text-white text-sm">{{ t('dataMgmt') }}</h3>
+            <div class="flex gap-2 flex-wrap">
+              <button @click="exportData()" class="px-4 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700">{{ t('exportData') }}</button>
+              <label class="px-4 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 cursor-pointer">
+                {{ t('importData') }}
+                <input type="file" accept=".json" @change="importData" class="hidden">
+              </label>
+              <button @click="clearAllData()" class="px-4 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700">{{ t('clearData') }}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 系统日志 -->
+        <div v-if="currentPage==='logs'">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold dark:text-white">{{ t('logs') }}</h2>
+            <div class="flex gap-2">
+              <select v-model="logFilter" @change="loadLogs()" class="px-2 py-1 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm">
+                <option value="">{{ t('all') }}</option>
+                <option value="error">{{ t('error') }}</option>
+                <option value="warn">{{ t('warn') }}</option>
+                <option value="info">{{ t('info') }}</option>
+              </select>
+              <button @click="loadLogs()" class="px-3 py-1.5 bg-gray-600 text-white rounded text-sm">{{ t('refresh') }}</button>
+            </div>
+          </div>
+          <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="max-h-[500px] overflow-y-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50 dark:bg-gray-700 sticky top-0"><tr>
+                  <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('time') }}</th>
+                  <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('level') }}</th>
+                  <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('content') }}</th>
+                </tr></thead>
+                <tbody class="divide-y dark:divide-gray-700">
+                  <tr v-for="l in logs" :key="l.id" class="dark:text-gray-300">
+                    <td class="px-3 py-1.5 text-xs text-gray-500 whitespace-nowrap">{{ formatTime(l.timestamp) }}</td>
+                    <td class="px-3 py-1.5"><span :class="['px-2 py-0.5 rounded text-xs', l.level==='error'?'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300':l.level==='warn'?'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300':'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300']">{{ levelText(l.level) }}</span></td>
+                    <td class="px-3 py-1.5 text-xs">{{ l.message }}</td>
+                  </tr>
+                  <tr v-if="!logs.length"><td colspan="3" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通用弹窗 -->
+    <div v-if="modal" class="fixed inset-0 modal-mask flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-[420px] max-h-[80vh] overflow-y-auto">
+        <h3 class="text-lg font-bold mb-4 dark:text-white">{{ modalTitle }}</h3>
+        <!-- 添加账号 -->
+        <div v-if="modal==='addAccount'">
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('provider') }}</label>
+            <select v-model="form.providerId" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1">
+              <option value="deepseek">DeepSeek</option><option value="kimi">Kimi</option><option value="glm">GLM</option><option value="qwen">Qwen</option><option value="minimax">MiniMax</option><option value="perplexity">Perplexity</option><option value="mimo">MiMo</option><option value="zai">Z.ai</option>
+            </select></div>
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('name') }}</label>
+            <input v-model="form.name" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">Token</label>
+            <input v-model="form.token" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+        </div>
+        <!-- 添加提示词 -->
+        <div v-if="modal==='addPrompt'||modal==='editPrompt'">
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('name') }}</label>
+            <input v-model="form.name" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('description') }}</label>
+            <input v-model="form.description" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('content') }}</label>
+            <textarea v-model="form.content" rows="6" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1 font-mono text-sm"></textarea></div>
+        </div>
+        <!-- 添加模型映射 -->
+        <div v-if="modal==='addMapping'">
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('requestModel') }}</label>
+            <input v-model="form.requestModel" placeholder="gpt-4" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('mapTo') }}</label>
+            <input v-model="form.actualModel" placeholder="deepseek-chat" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+          <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('provider') }} ({{ t('all') }})</label>
+            <input v-model="form.providerId" placeholder="deepseek" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
+        </div>
+        <!-- 会话详情 -->
+        <div v-if="modal==='sessionDetail'">
+          <div v-for="(m,i) in sessionMessages" :key="i" class="mb-3 p-2 rounded" :class="m.role==='user'?'bg-blue-50 dark:bg-blue-900':'bg-gray-50 dark:bg-gray-700'">
+            <span class="text-xs font-bold" :class="m.role==='user'?'text-blue-600 dark:text-blue-300':'text-green-600 dark:text-green-300'">{{ m.role }}</span>
+            <pre class="text-xs mt-1 dark:text-gray-300">{{ typeof m.content==='string'?m.content:JSON.stringify(m.content,null,2) }}</pre>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button v-if="modal!=='sessionDetail'" @click="submitModal()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 text-sm">{{ t('confirm') }}</button>
+          <button @click="modal=null" class="flex-1 bg-gray-200 dark:bg-gray-600 dark:text-white py-2 rounded hover:bg-gray-300 text-sm">{{ t('close') }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  const { createApp, ref, reactive, computed, onMounted, watch } = Vue
+  const i18n = {
+    zh: { subtitle:'管理后台',secret:'管理密钥',apiBase:'API 地址',login:'登 录',logout:'退出',dashboard:'仪表盘',providers:'服务商',accounts:'账号管理',models:'模型管理',mappings:'模型映射',prompts:'系统提示词',apikeys:'API 密钥',sessions:'会话管理',requestLogs:'请求日志',logs:'系统日志',settings:'设置',status:'服务状态',port:'监听端口',uptime:'运行时间',connections:'活跃连接',running:'运行中',stopped:'已停止',totalRequests:'总请求数',successRate:'成功率',avgLatency:'平均延迟',dailyTrend:'每日趋势',success:'成功',failed:'失败',proxyControl:'代理控制',start:'启动',stop:'停止',restart:'重启',name:'名称',provider:'服务商',account:'账号',actions:'操作',add:'添加',delete:'删除',edit:'编辑',create:'创建',validate:'验证',remove:'移除',noData:'暂无数据',displayName:'显示名称',actualModel:'实际模型',type:'类型',custom:'自定义',builtIn:'内置',addCustomModel:'添加自定义模型',description:'描述',content:'内容',key:'密钥',usage:'使用次数',messages:'消息',active:'活跃',expired:'已过期',clearAll:'清空全部',time:'时间',level:'级别',model:'模型',latency:'延迟',all:'全部',refresh:'刷新',error:'错误',warn:'警告',info:'信息',confirm:'确认',close:'关闭',contextMgmt:'上下文管理',enabled:'启用',strategy:'策略',slidingWindow:'滑动窗口',tokenLimit:'Token 限制',summary:'摘要压缩',maxMessages:'最大消息数',maxTokens:'最大 Token 数',toolCalling:'工具调用 (Function Calling)',mode:'模式',off:'关闭',auto:'自动',force:'强制',clientAdapter:'客户端适配器',otherSettings:'其他设置',loadBalance:'负载均衡',roundRobin:'轮询',fillFirst:'填满优先',failover:'故障转移',logLevel:'日志级别',requestTimeout:'请求超时',retryCount:'重试次数',userInput:'用户输入',response:'AI 响应',expandBody:'展开完整内容',collapse:'收起',enable:'启用',disable:'禁用',online:'在线',offline:'离线',enabled2:'已启用',disabled2:'已禁用',accountCount:'账号数',clearChats:'清除聊天记录',exportData:'导出数据',importData:'导入数据',clearData:'清空数据',dataMgmt:'数据管理',requestModel:'请求模型',mapTo:'映射到',addMapping:'添加映射',copy:'复制',show:'显示',hide:'隐藏',search:'搜索',today:'今日',yesterday:'昨日',providerStatus:'服务商状态',recentActivity:'最近活动', },
+    en: { subtitle:'Admin Panel',secret:'Management Secret',apiBase:'API Base URL',login:'Login',logout:'Logout',dashboard:'Dashboard',providers:'Providers',accounts:'Accounts',models:'Models',mappings:'Model Mappings',prompts:'System Prompts',apikeys:'API Keys',sessions:'Sessions',requestLogs:'Request Logs',logs:'System Logs',settings:'Settings',status:'Status',port:'Port',uptime:'Uptime',connections:'Connections',running:'Running',stopped:'Stopped',totalRequests:'Total Requests',successRate:'Success Rate',avgLatency:'Avg Latency',dailyTrend:'Daily Trend',success:'Success',failed:'Failed',proxyControl:'Proxy Control',start:'Start',stop:'Stop',restart:'Restart',name:'Name',provider:'Provider',account:'Account',actions:'Actions',add:'Add',delete:'Delete',edit:'Edit',create:'Create',validate:'Validate',remove:'Remove',noData:'No data',displayName:'Display Name',actualModel:'Actual Model',type:'Type',custom:'Custom',builtIn:'Built-in',addCustomModel:'Add Custom Model',description:'Description',content:'Content',key:'Key',usage:'Usage',messages:'messages',active:'Active',expired:'Expired',clearAll:'Clear All',time:'Time',level:'Level',model:'Model',latency:'Latency',all:'All',refresh:'Refresh',error:'Error',warn:'Warning',info:'Info',confirm:'Confirm',close:'Close',contextMgmt:'Context Management',enabled:'Enabled',strategy:'Strategy',slidingWindow:'Sliding Window',tokenLimit:'Token Limit',summary:'Summary',maxMessages:'Max Messages',maxTokens:'Max Tokens',toolCalling:'Tool Calling (Function Calling)',mode:'Mode',off:'Off',auto:'Auto',force:'Force',clientAdapter:'Client Adapter',otherSettings:'Other Settings',loadBalance:'Load Balance',roundRobin:'Round Robin',fillFirst:'Fill First',failover:'Failover',logLevel:'Log Level',requestTimeout:'Request Timeout',retryCount:'Retry Count',userInput:'User Input',response:'AI Response',expandBody:'Expand Full Content',collapse:'Collapse',enable:'Enable',disable:'Disable',online:'Online',offline:'Offline',enabled2:'Enabled',disabled2:'Disabled',accountCount:'Accounts',clearChats:'Clear Chats',exportData:'Export Data',importData:'Import Data',clearData:'Clear Data',dataMgmt:'Data Management',requestModel:'Request Model',mapTo:'Map To',addMapping:'Add Mapping',copy:'Copy',show:'Show',hide:'Hide',search:'Search',today:'Today',yesterday:'Yesterday',providerStatus:'Provider Status',recentActivity:'Recent Activity', },
+  }
+  createApp({
+    setup() {
+      const authenticated = ref(false)
+      const secret = ref('')
+      const apiBase = ref(window.location.protocol+'//'+window.location.hostname+':18050')
+      const adminBase = ref(window.location.protocol+'//'+window.location.hostname+':18051')
+      const loginError = ref('')
+      const currentPage = ref('dashboard')
+      const lang = ref(localStorage.getItem('chat2api_lang')||'zh')
+      const darkMode = ref(localStorage.getItem('chat2api_dark')==='true')
+      const t = (k) => i18n[lang.value]?.[k]||k
+      watch(lang, v => localStorage.setItem('chat2api_lang', v))
+      watch(darkMode, v => localStorage.setItem('chat2api_dark', v))
+
+      const health=ref({}), stats=ref({}), todayStats=ref({}), accounts=ref([]), apiKeys=ref([]), logs=ref([]), sessions=ref([]), prompts=ref([]), effectiveModels=ref([]), requestLogs=ref([]), dailyTrend=ref([]), allProviders=ref([]), modelMappings=ref({})
+      const providers=ref([]), selectedProvider=ref('deepseek')
+      const logFilter=ref(''), reqLogFilter=ref('')
+      const modal=ref(null), modalTitle=ref('')
+      const form=reactive({providerId:'deepseek',name:'',token:'',description:'',content:'',id:'',requestModel:'',actualModel:'',mappingProvider:''})
+      const newModel=reactive({displayName:'',actualModelId:''})
+      const settingsConfig=reactive({contextManagement:{enabled:false,strategy:'slidingWindow',maxMessages:20,maxTokens:4000},toolCallingConfig:{enabled:true,mode:'auto',clientAdapterId:'standard-openai-tools'},loadBalanceStrategy:'round_robin',logLevel:'info',requestTimeout:60000,retryCount:3})
+
+      const navItems=[{key:'dashboard',icon:'📊'},{key:'providers',icon:'🏢'},{key:'accounts',icon:'👤'},{key:'models',icon:'🧩'},{key:'mappings',icon:'🔀'},{key:'prompts',icon:'💬'},{key:'apikeys',icon:'🔑'},{key:'sessions',icon:'🗂️'},{key:'requestLogs',icon:'📋'},{key:'logs',icon:'📝'},{key:'settings',icon:'⚙️'}]
+      const providerNames={deepseek:'DeepSeek',kimi:'Kimi',glm:'GLM',qwen:'Qwen',minimax:'MiniMax',perplexity:'Perplexity',mimo:'MiMo',zai:'Z.ai'}
+      const credFields={deepseek:'userToken',kimi:'token',glm:'refreshToken',qwen:'tongyi_sso_ticket',minimax:'token',perplexity:'cookie',mimo:'cookie',zai:'token'}
+
+      const dailyMax = computed(() => Math.max(1, ...dailyTrend.value.map(d=>(d.successRequests||0)+(d.failedRequests||0))))
+      function barH(v, max) { return Math.max(2, (v/max)*90) }
+
+      async function api(path, opts={}) {
+        const r = await fetch(`${apiBase.value}/v0/management${path}`, { ...opts, headers:{Authorization:`Bearer ${secret.value}`,'Content-Type':'application/json',...opts.headers} })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      }
+      async function extApi(path, opts={}) {
+        const r = await fetch(`${adminBase.value}/api${path}`, { ...opts, headers:{Authorization:`Bearer ${secret.value}`,'Content-Type':'application/json',...opts.headers} })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      }
+
+      async function login() {
+        loginError.value=''
+        try { localStorage.setItem('chat2api_secret',secret.value); localStorage.setItem('chat2api_apiBase',apiBase.value); await api('/health'); authenticated.value=true; loadAll() }
+        catch(e) { loginError.value=t('login')+'：'+e.message; localStorage.removeItem('chat2api_secret') }
+      }
+      function logout() { authenticated.value=false; secret.value=''; localStorage.removeItem('chat2api_secret') }
+
+      function switchPage(p) { currentPage.value=p; loadPageData(p) }
+      function loadPageData(p) {
+        if (p==='dashboard') { loadHealth(); loadStats(); loadDailyTrend(); loadTodayStats(); loadAllProviders() }
+        else if (p==='providers') loadAllProviders()
+        else if (p==='accounts') loadAccounts()
+        else if (p==='models') { loadProviders(); loadModels() }
+        else if (p==='mappings') loadMappings()
+        else if (p==='prompts') loadPrompts()
+        else if (p==='apikeys') loadApiKeys()
+        else if (p==='sessions') loadSessions()
+        else if (p==='requestLogs') loadRequestLogs()
+        else if (p==='logs') loadLogs()
+        else if (p==='settings') loadConfig()
+      }
+      async function loadAll() { loadHealth(); loadStats(); loadDailyTrend(); loadTodayStats(); loadAccounts(); loadAllProviders() }
+
+      async function loadHealth() { try { const r=await api('/health'); health.value=r.data||{} } catch(e){} }
+      async function loadStats() { try { const r=await api('/statistics'); stats.value=r.data||{} } catch(e){} }
+      async function loadDailyTrend() { try { const r=await extApi('/request-logs/trend?days=7'); dailyTrend.value=r.data||[] } catch(e){} }
+      async function loadAccounts() { try { const r=await api('/accounts'); accounts.value=r.data||[] } catch(e){} }
+      async function loadProviders() { try { const r=await api('/providers'); providers.value=(r.data||[]).filter(p=>p.enabled) } catch(e){} }
+      async function loadAllProviders() { try { const r=await api('/providers'); allProviders.value=r.data||[] } catch(e){} }
+      async function loadTodayStats() { try { const r=await extApi('/statistics/daily'); todayStats.value=r.data||{} } catch(e){} }
+      function getAccountCount(providerId) { return accounts.value.filter(a=>a.providerId===providerId).length }
+      async function toggleProvider(id) { try { await extApi(`/providers/${id}/toggle`,{method:'POST'}); loadAllProviders() } catch(e){ alert(e.message) } }
+      async function loadMappings() { try { const r=await api('/config'); modelMappings.value=r.data?.modelMappings||{} } catch(e){} }
+      async function deleteMapping(model) { if(!confirm(t('delete')+'?')) return; try { await api(`/model-mappings/${encodeURIComponent(model)}`,{method:'DELETE'}); loadMappings() } catch(e){ alert(e.message) } }
+      async function clearAccountChats(id) { if(!confirm(t('clearChats')+'?')) return; try { await extApi(`/accounts/${id}/clear-chats`,{method:'POST'}); alert('OK') } catch(e){ alert(e.message) } }
+      async function exportData() {
+        try {
+          const r = await fetch(`${adminBase.value}/api/data/export`, { headers: { Authorization: `Bearer ${secret.value}` } })
+          const blob = await r.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a'); a.href = url; a.download = 'chat2api-backup.json'; a.click()
+          URL.revokeObjectURL(url)
+        } catch(e){ alert(e.message) }
+      }
+      async function importData(event) {
+        const file = event.target.files[0]
+        if (!file) return
+        const text = await file.text()
+        try { const data = JSON.parse(text); await extApi('/data/import',{method:'POST',body:JSON.stringify(data)}); alert('OK'); loadAll() } catch(e){ alert(e.message) }
+      }
+      async function clearAllData() { if(!confirm(t('clearData')+'?')) return; try { await extApi('/data/clear',{method:'POST'}); alert('OK'); loadAll() } catch(e){ alert(e.message) } }
+      async function loadApiKeys() { try { const r=await api('/api-keys'); apiKeys.value=r.data||[] } catch(e){} }
+      async function loadSessions() { try { const r=await api('/sessions'); sessions.value=r.data||[] } catch(e){} }
+      async function loadLogs() { try { const q=logFilter.value?`&level=${logFilter.value}`:''; const r=await api(`/logs?limit=50${q}`); logs.value=r.data?.logs||[] } catch(e){} }
+      async function loadRequestLogs() { try { const q=reqLogFilter.value?`?status=${reqLogFilter.value}`:''; const r=await extApi(`/request-logs${q}`); requestLogs.value=r.data||[] } catch(e){} }
+      async function loadPrompts() { try { const r=await extApi('/prompts'); prompts.value=r.data||[] } catch(e){} }
+      async function loadModels() { if(!selectedProvider.value&&providers.value.length) selectedProvider.value=providers.value[0].id; try { const r=await extApi(`/models/effective/${selectedProvider.value}`); effectiveModels.value=r.data||[] } catch(e){} }
+      async function loadConfig() {
+        try {
+          const r=await api('/config'); const c=r.data||{}
+          if(c.contextManagement) Object.assign(settingsConfig.contextManagement, c.contextManagement)
+          if(c.toolCallingConfig) Object.assign(settingsConfig.toolCallingConfig, c.toolCallingConfig)
+          settingsConfig.loadBalanceStrategy=c.loadBalanceStrategy||'round_robin'
+          settingsConfig.logLevel=c.logLevel||'info'
+          settingsConfig.requestTimeout=c.requestTimeout||60000
+          settingsConfig.retryCount=c.retryCount||3
+        } catch(e){}
+      }
+
+      async function saveSettings() {
+        try { await api('/config', {method:'PUT',body:JSON.stringify({contextManagement:settingsConfig.contextManagement,toolCallingConfig:settingsConfig.toolCallingConfig,loadBalanceStrategy:settingsConfig.loadBalanceStrategy,logLevel:settingsConfig.logLevel,requestTimeout:settingsConfig.requestTimeout,retryCount:settingsConfig.retryCount})}) } catch(e){ alert(e.message) }
+      }
+
+      function openModal(m) { modal.value=m; Object.assign(form,{providerId:'deepseek',name:'',token:'',description:'',content:'',id:'',requestModel:'',actualModel:'',mappingProvider:''}); if(m==='addPrompt') modalTitle.value=t('prompts')+' - '+t('add'); else if(m==='addAccount') modalTitle.value=t('accounts')+' - '+t('add'); else if(m==='addMapping') modalTitle.value=t('mappings')+' - '+t('add') }
+      async function submitModal() {
+        if (modal.value==='addAccount') { const f=credFields[form.providerId]||'token'; await api('/accounts',{method:'POST',body:JSON.stringify({providerId:form.providerId,name:form.name,status:'active',credentials:{[f]:form.token}})}); modal.value=null; loadAccounts() }
+        else if (modal.value==='addPrompt') { await extApi('/prompts',{method:'POST',body:JSON.stringify({name:form.name,description:form.description,content:form.content,type:'custom'})}); modal.value=null; loadPrompts() }
+        else if (modal.value==='editPrompt') { await extApi(`/prompts/${form.id}`,{method:'PUT',body:JSON.stringify({name:form.name,description:form.description,content:form.content})}); modal.value=null; loadPrompts() }
+        else if (modal.value==='addMapping') { await api('/model-mappings',{method:'POST',body:JSON.stringify({requestModel:form.requestModel,actualModel:form.actualModel,providerId:form.mappingProvider||undefined})}); modal.value=null; loadMappings() }
+      }
+      function editPrompt(p) { Object.assign(form,{id:p.id,name:p.name,description:p.description||'',content:p.content||''}); modal.value='editPrompt'; modalTitle.value=t('prompts')+' - '+t('edit') }
+      async function deletePrompt(id) { if(!confirm(t('delete')+'?')) return; await extApi(`/prompts/${id}`,{method:'DELETE'}); loadPrompts() }
+      async function deleteAccount(id) { if(!confirm(t('delete')+'?')) return; await api(`/accounts/${id}`,{method:'DELETE'}); loadAccounts() }
+      async function validateAccount(id) { try { await api(`/accounts/${id}/validate`,{method:'POST'}); alert('OK') } catch(e){ alert(e.message) } }
+      async function createApiKey() { const n=prompt(t('name')+':'); if(!n)return; const r=await api('/api-keys',{method:'POST',body:JSON.stringify({name:n})}); alert(r.data?.key||'OK'); loadApiKeys() }
+      async function deleteApiKey(id) { if(!confirm(t('delete')+'?')) return; await api(`/api-keys/${id}`,{method:'DELETE'}); loadApiKeys() }
+      async function deleteSession(id) { if(!confirm(t('delete')+'?')) return; await api(`/sessions/${id}`,{method:'DELETE'}); loadSessions() }
+      async function clearSessions() { if(!confirm(t('clearAll')+'?')) return; await api('/sessions',{method:'DELETE',body:JSON.stringify({confirm:true})}); loadSessions() }
+      async function viewSession(id) { try { const r=await api(`/sessions/${id}`); form.id=id; sessionMessages.value=r.data?.messages||[]; modal.value='sessionDetail'; modalTitle.value=t('sessions') } catch(e){} }
+      const sessionMessages=ref([])
+      async function addModel() { if(!newModel.displayName||!newModel.actualModelId) return; await extApi(`/models/custom/${selectedProvider.value}`,{method:'POST',body:JSON.stringify(newModel)}); newModel.displayName=''; newModel.actualModelId=''; loadModels() }
+      async function removeModel(name) { if(!confirm(t('remove')+'?')) return; await extApi(`/models/remove/${selectedProvider.value}`,{method:'POST',body:JSON.stringify({modelName:name})}); loadModels() }
+      async function proxyAction(a) { try { await api(`/proxy/${a}`,{method:'POST'}); setTimeout(loadHealth,1000) } catch(e){ alert(e.message) } }
+
+      function formatUptime(ms) { if(!ms) return '-'; const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60); if(d>0) return d+(lang.value==='zh'?'天':'d')+' '+h+(lang.value==='zh'?'时':'h'); if(h>0) return h+(lang.value==='zh'?'时':'h')+' '+m+(lang.value==='zh'?'分':'m'); return m+(lang.value==='zh'?'分':'m') }
+      function formatTime(ts) { return ts?new Date(ts).toLocaleString(lang.value==='zh'?'zh-CN':'en-US'):'-' }
+      function statusText(s) { const m={active:lang.value==='zh'?'正常':'Active',inactive:lang.value==='zh'?'未启用':'Inactive',error:lang.value==='zh'?'异常':'Error'}; return m[s]||s }
+      function levelText(l) { const m={error:lang.value==='zh'?'错误':'Error',warn:lang.value==='zh'?'警告':'Warn',info:lang.value==='zh'?'信息':'Info',debug:lang.value==='zh'?'调试':'Debug'}; return m[l]||l }
+
+      onMounted(() => {
+        const s=localStorage.getItem('chat2api_secret'), b=localStorage.getItem('chat2api_apiBase')
+        if(s) { secret.value=s; apiBase.value=b||(window.location.protocol+'//'+window.location.hostname+':18050'); login() }
+      })
+
+      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,formatUptime,formatTime,statusText,levelText }
+    }
+  }).mount('#app')
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+services:
+  chat2api:
+    image: movemama/chat2api:latest
+    container_name: chat2api
+    restart: unless-stopped
+    ports:
+      - "18050:18050"
+      - "18051:18051"
+    environment:
+      - CHAT2API_PORT=18050
+      - CHAT2API_HOST=0.0.0.0
+      - CHAT2API_LOG_LEVEL=info
+      - CHAT2API_MANAGEMENT_SECRET=mgmt_chat2api_docker_secret_2026
+      - NODE_ENV=production
+      - TZ=Asia/Shanghai
+    volumes:
+      # 数据持久化到宿主机 ./data 目录
+      - ./data:/root/.chat2api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:18050/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3

@@ -1,0 +1,43 @@
+{
+  "_comment": "Chat2API Docker 配置文件 - 挂载到容器内 /root/.chat2api/docker-config.json",
+
+  "config": {
+    "proxyPort": 8080,
+    "proxyHost": "0.0.0.0",
+    "loadBalanceStrategy": "round_robin",
+    "logLevel": "info",
+    "enableApiKey": true,
+    "toolCallingConfig": {
+      "enabled": true,
+      "mode": "auto"
+    },
+    "contextManagement": {
+      "enabled": false
+    }
+  },
+
+  "accounts": [
+    {
+      "id": "deepseek-account-1",
+      "providerId": "deepseek",
+      "name": "My DeepSeek Account",
+      "status": "active",
+      "credentials": {
+        "userToken": "your-deepseek-user-token-here"
+      },
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+
+  "apiKeys": [
+    {
+      "id": "key-1",
+      "key": "sk-your-custom-api-key-here",
+      "name": "Default Key",
+      "enabled": true,
+      "createdAt": 1700000000000,
+      "usageCount": 0
+    }
+  ]
+}

@@ -9,6 +9,7 @@ build/entitlements.mac.plist
 # TypeScript
 *.tsbuildinfo
 src/**/*.js
+!src/docker/*.js
 src/**/*.d.ts
 electron.vite.config.js
 electron.vite.config.d.ts

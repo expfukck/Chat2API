@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build output
+out/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+*.test.ts
+*.spec.ts
+
+# GitHub
+.github/
+
+# Build resources (icons, installers)
+build/*.ico
+build/*.icns
+build/*.png
+build/*.dmg
+build/*.exe
+
+# Scripts not needed in Docker (but check-source-artifacts.js is needed by build)
+scripts/dev.sh
+scripts/release.js
+
+# Renderer (GUI) - not needed for Docker
+src/renderer/
+src/preload/
