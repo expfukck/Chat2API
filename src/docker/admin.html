@@ -287,24 +287,40 @@
         <div v-if="currentPage==='apikeys'">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-bold dark:text-white">{{ t('apikeys') }}</h2>
-            <button @click="createApiKey()" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">+ {{ t('create') }}</button>
+            <div class="flex gap-2">
+              <label class="flex items-center gap-1 text-sm dark:text-gray-300">
+                <input type="checkbox" v-model="settingsConfig.enableApiKey" @change="saveSettings()"> {{ t('enabled') }}
+              </label>
+              <button @click="createApiKey()" class="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">+ {{ t('create') }}</button>
+            </div>
           </div>
           <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 dark:bg-gray-700"><tr>
                 <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('name') }}</th>
                 <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('key') }}</th>
+                <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('status') }}</th>
                 <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('usage') }}</th>
                 <th class="px-3 py-2 text-left text-gray-500 dark:text-gray-300">{{ t('actions') }}</th>
               </tr></thead>
               <tbody class="divide-y dark:divide-gray-700">
                 <tr v-for="k in apiKeys" :key="k.id" class="dark:text-gray-300">
                   <td class="px-3 py-2">{{ k.name }}</td>
-                  <td class="px-3 py-2 font-mono text-xs">{{ k.key?.substring(0,24) }}...</td>
+                  <td class="px-3 py-2 font-mono text-xs">
+                    <span v-if="k._show">{{ k.key }}</span>
+                    <span v-else>{{ k.key?.substring(0,20) }}••••••••</span>
+                  </td>
+                  <td class="px-3 py-2">
+                    <span :class="['px-2 py-0.5 rounded text-xs cursor-pointer', k.enabled!==false?'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300']" @click="toggleApiKeyEnabled(k)">{{ k.enabled!==false?t('enabled2'):t('disabled2') }}</span>
+                  </td>
                   <td class="px-3 py-2">{{ k.usageCount||0 }}</td>
-                  <td class="px-3 py-2"><button @click="deleteApiKey(k.id)" class="text-red-500 text-xs">{{ t('delete') }}</button></td>
+                  <td class="px-3 py-2 flex gap-2">
+                    <button @click="k._show=!k._show" class="text-blue-500 text-xs">{{ k._show?t('hide'):t('show') }}</button>
+                    <button @click="copyApiKey(k.key)" class="text-green-600 text-xs">{{ t('copy') }}</button>
+                    <button @click="deleteApiKey(k.id)" class="text-red-500 text-xs">{{ t('delete') }}</button>
+                  </td>
                 </tr>
-                <tr v-if="!apiKeys.length"><td colspan="4" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
+                <tr v-if="!apiKeys.length"><td colspan="5" class="px-3 py-8 text-center text-gray-400">{{ t('noData') }}</td></tr>
               </tbody>
             </table>
           </div>
@@ -712,7 +728,26 @@
       ]
 
       const currentGuide = computed(() => providerGuides.find(p => p.id === form.providerId))
-      function openProviderSite(id) { const g = providerGuides.find(p => p.id === id); if (g) window.open(g.loginUrl, '_blank') }
+      function openProviderSite(id) {
+        const g = providerGuides.find(p => p.id === id)
+        if (g) {
+          // Open in a popup window (900x700)
+          const w = 900, h = 700
+          const left = (screen.width - w) / 2, top = (screen.height - h) / 2
+          const popup = window.open(g.loginUrl, 'provider_login', `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`)
+          if (popup) {
+            // Monitor popup close - remind user to paste token
+            const timer = setInterval(() => {
+              if (popup.closed) {
+                clearInterval(timer)
+                // Focus back on the token input
+                const tokenInput = document.querySelector('textarea[placeholder]')
+                if (tokenInput) tokenInput.focus()
+              }
+            }, 500)
+          }
+        }
+      }
       function copyScript() { const g = currentGuide.value; if (g) { navigator.clipboard.writeText(g.script); alert(lang.value==='zh'?'已复制到剪贴板，请在 Provider 网站的开发者工具 Console 中粘贴运行':'Copied! Paste in Provider site DevTools Console') } }
 
       const dailyMax = computed(() => Math.max(1, ...dailyTrend.value.map(d=>(d.successRequests||0)+(d.failedRequests||0))))
@@ -813,7 +848,21 @@
       async function deletePrompt(id) { if(!confirm(t('delete')+'?')) return; await extApi(`/prompts/${id}`,{method:'DELETE'}); loadPrompts() }
       async function deleteAccount(id) { if(!confirm(t('delete')+'?')) return; await api(`/accounts/${id}`,{method:'DELETE'}); loadAccounts() }
       async function validateAccount(id) { try { await api(`/accounts/${id}/validate`,{method:'POST'}); alert('OK') } catch(e){ alert(e.message) } }
-      async function createApiKey() { const n=prompt(t('name')+':'); if(!n)return; const r=await api('/api-keys',{method:'POST',body:JSON.stringify({name:n})}); alert(r.data?.key||'OK'); loadApiKeys() }
+      async function createApiKey() {
+        const n=prompt(t('name')+':'); if(!n)return;
+        const r=await api('/api-keys',{method:'POST',body:JSON.stringify({name:n})});
+        const newKey=r.data?.key;
+        if(newKey){const c=confirm(`${lang.value==='zh'?'密钥创建成功':'Key created'}:\n\n${newKey}\n\n${lang.value==='zh'?'点击确定复制到剪贴板（仅显示一次！）':'Click OK to copy (shown once!)'}`);if(c)navigator.clipboard.writeText(newKey)}
+        loadApiKeys()
+      }
+      function copyApiKey(key) {
+        navigator.clipboard.writeText(key||'');
+        const el=event.target,orig=el.textContent;el.textContent='✓';setTimeout(()=>{el.textContent=orig},1000)
+      }
+      async function toggleApiKeyEnabled(k) {
+        const enabled=k.enabled===false;
+        await api(`/api-keys/${k.id}`,{method:'PUT',body:JSON.stringify({enabled})});loadApiKeys()
+      }
       async function deleteApiKey(id) { if(!confirm(t('delete')+'?')) return; await api(`/api-keys/${id}`,{method:'DELETE'}); loadApiKeys() }
       async function deleteSession(id) { if(!confirm(t('delete')+'?')) return; await api(`/sessions/${id}`,{method:'DELETE'}); loadSessions() }
       async function clearSessions() { if(!confirm(t('clearAll')+'?')) return; await api('/sessions',{method:'DELETE',body:JSON.stringify({confirm:true})}); loadSessions() }
@@ -833,7 +882,7 @@
         if(s) { secret.value=s; apiBase.value=b||(window.location.protocol+'//'+window.location.hostname+':18050'); login() }
       })
 
-      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,providerGuides,currentGuide,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,openProviderSite,copyScript,formatUptime,formatTime,statusText,levelText }
+      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,providerGuides,currentGuide,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,openProviderSite,copyScript,copyApiKey,toggleApiKeyEnabled,formatUptime,formatTime,statusText,levelText }
     }
   }).mount('#app')
   </script>
