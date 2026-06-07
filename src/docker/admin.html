@@ -549,69 +549,41 @@
             </select></div>
 
           <!-- Provider 引导 -->
-          <div v-if="currentGuide" class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div class="flex items-center justify-between mb-3">
-              <span class="font-bold text-sm text-blue-800 dark:text-blue-300">{{ t('getToken') }}</span>
-              <button @click="openProviderSite(form.providerId)" class="px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 font-bold">
+          <div v-if="currentGuide" class="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden">
+            <!-- Step 1 -->
+            <div class="p-3 bg-blue-50 dark:bg-blue-900/30 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-blue-800 dark:text-blue-300">Step 1</span>
+                <p class="text-sm text-blue-700 dark:text-blue-300 mt-0.5">{{ lang==='zh'?'打开网站并登录':'Open site & login' }}</p>
+              </div>
+              <button @click="openProviderSite(form.providerId)" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 font-bold shadow">
                 {{ t('openSite') }} ↗
               </button>
             </div>
-
-            <!-- 方式一：书签自动获取（推荐） -->
-            <div class="mb-3 p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-              <p class="text-xs font-bold text-green-800 dark:text-green-300 mb-2">
-                ⚡ {{ lang==='zh'?'方式一：书签一键获取（推荐）':'Method 1: Bookmarklet (Recommended)' }}
-              </p>
-              <div class="space-y-2">
-                <p class="text-xs text-green-700 dark:text-green-400">
-                  {{ lang==='zh'?'① 把下方绿色按钮拖到浏览器书签栏：':'① Drag the green button below to your bookmarks bar:' }}
-                </p>
-                <a :href="currentGuide.bookmarklet"
-                   class="inline-block px-4 py-2 bg-green-600 text-white rounded-md text-xs font-bold cursor-grab hover:bg-green-700 no-underline shadow"
-                   @click.prevent="alert(lang==='zh'?'请把这个按钮拖到书签栏，而不是点击它！':'Please drag this button to bookmarks bar, not click it!')"
-                   draggable="true">
-                  📌 {{ lang==='zh'?'获取':'Get' }} {{ currentGuide.name }} Token
-                </a>
-                <p class="text-xs text-green-700 dark:text-green-400">
-                  {{ lang==='zh'?'② 在弹出窗口中登录 '+currentGuide.name:'② Login to '+currentGuide.name+' in the popup' }}
-                </p>
-                <p class="text-xs text-green-700 dark:text-green-400">
-                  {{ lang==='zh'?'③ 登录后点击书签栏的「获取 '+currentGuide.name+' Token」':'③ Click the bookmarklet in bookmarks bar after login' }}
-                </p>
-                <p class="text-xs text-green-700 dark:text-green-400 font-bold">
-                  {{ lang==='zh'?'④ Token 自动回填到此处 ✓':'④ Token auto-fills here ✓' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- 方式二：F12 Console 手动获取 -->
-            <details class="p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600">
-              <summary class="text-xs font-bold text-gray-600 dark:text-gray-300 cursor-pointer">
-                {{ lang==='zh'?'方式二：F12 Console 手动获取':'Method 2: F12 Console (Manual)' }}
-              </summary>
-              <div class="mt-2">
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  {{ lang==='zh'?'在 Provider 弹窗中：F12 → Console → 粘贴代码 → 回车':'In the Provider popup: F12 → Console → Paste code → Enter' }}
-                </p>
-                <div class="flex gap-1 items-start">
-                  <textarea readonly rows="2" class="flex-1 text-xs bg-gray-50 dark:bg-gray-700 dark:text-gray-300 p-2 rounded font-mono border border-gray-200 dark:border-gray-600 resize-none select-all" :value="currentGuide.consoleCode"></textarea>
-                  <button @click="copyExtractCode()" class="px-3 py-2 bg-green-600 text-white rounded text-xs whitespace-nowrap hover:bg-green-700 font-bold flex-shrink-0">
-                    {{ copyBtnText }}
-                  </button>
+            <!-- Step 2 -->
+            <div class="p-3 bg-white dark:bg-gray-800 border-t border-blue-100 dark:border-gray-700">
+              <div class="flex items-start justify-between mb-2">
+                <div>
+                  <span class="text-xs font-bold text-gray-700 dark:text-gray-300">Step 2</span>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{{ lang==='zh'?'在弹出的窗口中按 F12 → Console → 粘贴代码 → 回车':'In the popup: F12 → Console → Paste → Enter' }}</p>
                 </div>
-                <p class="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                  {{ lang==='zh'?'⚡ 回车后弹出对话框，Ctrl+C 复制 Token，粘贴到下方':'⚡ Dialog pops up after Enter, Ctrl+C token, paste below' }}
-                </p>
               </div>
-            </details>
+              <div class="flex gap-1 items-start">
+                <div class="flex-1 bg-gray-900 text-green-400 p-2.5 rounded-lg font-mono text-xs leading-relaxed overflow-x-auto select-all cursor-text" @click="$event.target.select && $event.target.select()">{{ currentGuide.autoCode }}</div>
+                <button @click="copyAutoCode()" class="px-3 py-2.5 bg-green-600 text-white rounded-lg text-xs whitespace-nowrap hover:bg-green-700 font-bold flex-shrink-0 shadow">
+                  {{ copyBtnText }}
+                </button>
+              </div>
+              <p v-if="!form.token" class="text-xs text-gray-400 mt-2">💡 {{ lang==='zh'?'回车后 Token 自动回填到下方':'Token auto-fills below after Enter' }}</p>
+              <p v-if="form.token" class="text-xs text-green-600 mt-2 font-bold">✅ {{ lang==='zh'?'Token 已自动获取！填写名称后点击添加':'Token auto-filled! Enter name and click Add' }}</p>
+            </div>
           </div>
 
           <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('accountName') }}</label>
             <input v-model="form.name" :placeholder="lang==='zh'?'例：我的 DeepSeek':'e.g. My DeepSeek'" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
           <div class="mb-3">
-            <label class="text-sm text-gray-600 dark:text-gray-300">{{ currentGuide?.tokenLabel || 'Token' }} <span class="text-xs text-gray-400">({{ currentGuide?.tokenKey || 'token' }})</span></label>
-            <textarea v-model="form.token" rows="3" :placeholder="currentGuide?.placeholder || ''" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1 font-mono text-xs" :class="form.token ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : ''"></textarea>
-            <p v-if="form.token" class="text-xs text-green-600 mt-1">✓ {{ lang==='zh'?'Token 已填入，填写名称后点击添加':'Token filled, enter name and click Add' }}</p>
+            <label class="text-sm text-gray-600 dark:text-gray-300">{{ currentGuide?.tokenLabel || 'Token' }}</label>
+            <textarea v-model="form.token" rows="2" :placeholder="lang==='zh'?'Token 自动填入，或手动粘贴':'Auto-fills or paste manually'" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1 font-mono text-xs" :class="form.token ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : ''"></textarea>
           </div>
         </div>
         <!-- 添加提示词 -->
@@ -679,52 +651,32 @@
       const providerNames={deepseek:'DeepSeek',kimi:'Kimi',glm:'GLM',qwen:'Qwen',minimax:'MiniMax',perplexity:'Perplexity',mimo:'MiMo',zai:'Z.ai'}
       const credFields={deepseek:'userToken',kimi:'token',glm:'refreshToken',qwen:'tongyi_sso_ticket',minimax:'token',perplexity:'cookie',mimo:'cookie',zai:'token'}
 
-      const providerPopupOpen = ref(false)
-      const copyBtnText = ref(lang.value==='zh'?'复制代码':'Copy Code')
-
-      // Callback URL on our admin server
-      const cb = window.location.origin + '/auth/callback'
+      const copyBtnText = ref(lang.value==='zh'?'复制':'Copy')
 
       const providerGuides = [
         { id:'deepseek', name:'DeepSeek', loginUrl:'https://chat.deepseek.com', tokenKey:'userToken', tokenLabel:'User Token',
-          placeholder:lang==='zh'?'Token 将自动填入或从 F12 获取后粘贴':'Token auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=JSON.parse(localStorage.getItem("ds_chat_token")||"{}").access_token||localStorage.getItem("userToken")||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=deepseek"}else{alert("Token not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Token (Ctrl+C to copy):', JSON.parse(localStorage.getItem("ds_chat_token")||"{}").access_token || localStorage.getItem("userToken") || "NOT FOUND")`
+          autoCode: `var t=JSON.parse(localStorage.getItem("ds_chat_token")||"{}").access_token||localStorage.getItem("userToken");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'kimi', name:'Kimi', loginUrl:'https://kimi.moonshot.cn', tokenKey:'token', tokenLabel:'JWT Token',
-          placeholder:lang==='zh'?'Token 将自动填入或从 F12 获取后粘贴':'Token auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=localStorage.getItem("access_token")||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=kimi"}else{alert("Token not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Token (Ctrl+C to copy):', localStorage.getItem("access_token") || "NOT FOUND")`
+          autoCode: `var t=localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'glm', name:'GLM（智谱清言）', loginUrl:'https://chatglm.cn', tokenKey:'refreshToken', tokenLabel:'Refresh Token',
-          placeholder:lang==='zh'?'Token 将自动填入或从 F12 获取后粘贴':'Token auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=localStorage.getItem("refresh_token")||localStorage.getItem("token")||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=glm"}else{alert("Token not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Token (Ctrl+C to copy):', localStorage.getItem("refresh_token") || localStorage.getItem("token") || "NOT FOUND")`
+          autoCode: `var t=localStorage.getItem("refresh_token")||localStorage.getItem("token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'qwen', name:'Qwen（通义千问）', loginUrl:'https://tongyi.aliyun.com', tokenKey:'tongyi_sso_ticket', tokenLabel:'SSO Ticket',
-          placeholder:lang==='zh'?'Ticket 将自动填入或从 F12 获取后粘贴':'Ticket auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=document.cookie.match(/tongyi_sso_ticket=([^;]+)/);t=t?t[1]:"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=qwen"}else{alert("Ticket not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Ticket (Ctrl+C to copy):', document.cookie.match(/tongyi_sso_ticket=([^;]+)/)?.[1] || "NOT FOUND")`
+          autoCode: `var t=document.cookie.match(/tongyi_sso_ticket=([^;]+)/);t=t?t[1]:"";if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Ticket sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'minimax', name:'MiniMax', loginUrl:'https://chat.minimaxi.com', tokenKey:'token', tokenLabel:'JWT Token',
-          placeholder:lang==='zh'?'Token 将自动填入或从 F12 获取后粘贴':'Token auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=localStorage.getItem("token")||localStorage.getItem("access_token")||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=minimax"}else{alert("Token not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Token (Ctrl+C to copy):', localStorage.getItem("token") || localStorage.getItem("access_token") || "NOT FOUND")`
+          autoCode: `var t=localStorage.getItem("token")||localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'perplexity', name:'Perplexity', loginUrl:'https://www.perplexity.ai', tokenKey:'cookie', tokenLabel:'Cookie',
-          placeholder:lang==='zh'?'Cookie 将自动填入或从 F12 获取后粘贴':'Cookie auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=document.cookie||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=perplexity"}else{alert("Cookie not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Cookie (Ctrl+C to copy):', document.cookie || "NOT FOUND")`
+          autoCode: `var t=document.cookie;if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Cookie sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'mimo', name:'MiMo', loginUrl:'https://mimo.xiaomi.com', tokenKey:'cookie', tokenLabel:'Cookie',
-          placeholder:lang==='zh'?'Cookie 将自动填入或从 F12 获取后粘贴':'Cookie auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=document.cookie||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=mimo"}else{alert("Cookie not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Cookie (Ctrl+C to copy):', document.cookie || "NOT FOUND")`
+          autoCode: `var t=document.cookie;if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Cookie sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'zai', name:'Z.ai', loginUrl:'https://z.ai', tokenKey:'token', tokenLabel:'JWT Token',
-          placeholder:lang==='zh'?'Token 将自动填入或从 F12 获取后粘贴':'Token auto-fills or paste from F12',
-          bookmarklet: `javascript:void(function(){var t=localStorage.getItem("token")||localStorage.getItem("access_token")||"";if(t){location.href="${cb}?token="+encodeURIComponent(t)+"&provider=zai"}else{alert("Token not found! Please login first.")}}())`,
-          consoleCode: `prompt('Your Token (Ctrl+C to copy):', localStorage.getItem("token") || localStorage.getItem("access_token") || "NOT FOUND")`
+          autoCode: `var t=localStorage.getItem("token")||localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
       ]
 
@@ -732,50 +684,28 @@
 
       function openProviderSite(id) {
         const g = providerGuides.find(p => p.id === id)
-        if (g) {
-          const w = 900, h = 700
-          const left = (screen.width - w) / 2, top = (screen.height - h) / 2
-          window.open(g.loginUrl, 'provider_login', `width=${w},height=${h},left=${left},top=${top},toolbar=yes,menubar=no,scrollbars=yes,resizable=yes`)
-          providerPopupOpen.value = true
-        }
+        if (!g) return
+        const w = 1000, h = 700
+        const left = (screen.width - w) / 2, top = (screen.height - h) / 2
+        window.open(g.loginUrl, 'provider_login', `width=${w},height=${h},left=${left},top=${top},toolbar=yes,menubar=no,scrollbars=yes,resizable=yes`)
       }
 
-      function copyExtractCode() {
+      function copyAutoCode() {
         const g = currentGuide.value
         if (!g) return
-        const code = g.consoleCode
-
-        // Method 1: Modern clipboard API
+        const code = g.autoCode
+        // Try modern clipboard first
         if (navigator.clipboard && window.isSecureContext) {
-          navigator.clipboard.writeText(code).then(() => {
-            copyBtnText.value = lang.value==='zh'?'✓ 已复制！':'✓ Copied!'
-            setTimeout(() => { copyBtnText.value = lang.value==='zh'?'复制代码':'Copy Code' }, 2000)
-          }).catch(() => fallbackCopy(code))
-        } else {
-          fallbackCopy(code)
-        }
+          navigator.clipboard.writeText(code).then(() => showCopyOk()).catch(() => fbCopy(code))
+        } else { fbCopy(code) }
       }
-
-      function fallbackCopy(text) {
-        // Method 2: textarea + execCommand (works on HTTP)
+      function showCopyOk() { copyBtnText.value = lang.value==='zh'?'✓ 已复制':'✓ Copied'; setTimeout(() => { copyBtnText.value = lang.value==='zh'?'复制':'Copy' }, 2000) }
+      function fbCopy(text) {
         const ta = document.createElement('textarea')
-        ta.value = text
-        ta.style.position = 'fixed'
-        ta.style.left = '-9999px'
-        document.body.appendChild(ta)
-        ta.select()
-        ta.setSelectionRange(0, text.length)
-        try {
-          document.execCommand('copy')
-          copyBtnText.value = lang.value==='zh'?'✓ 已复制！':'✓ Copied!'
-        } catch (e) {
-          // Method 3: Select the textarea content for manual copy
-          const codeEl = document.getElementById('extractCode')
-          if (codeEl) { codeEl.select(); codeEl.focus() }
-          copyBtnText.value = lang.value==='zh'?'请手动 Ctrl+C':'Please Ctrl+C'
-        }
+        ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px'
+        document.body.appendChild(ta); ta.select()
+        try { document.execCommand('copy'); showCopyOk() } catch(e) { copyBtnText.value = lang.value==='zh'?'请手动 Ctrl+C':'Please Ctrl+C'; setTimeout(() => { copyBtnText.value = lang.value==='zh'?'复制':'Copy' }, 2000) }
         document.body.removeChild(ta)
-        setTimeout(() => { copyBtnText.value = lang.value==='zh'?'复制代码':'Copy Code' }, 2000)
       }
 
       // === Token auto-fill from bookmarklet callback ===
@@ -945,7 +875,7 @@
         if(s) { secret.value=s; apiBase.value=b||(window.location.protocol+'//'+window.location.hostname+':18050'); login() }
       })
 
-      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,providerGuides,currentGuide,providerPopupOpen,copyBtnText,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,openProviderSite,copyExtractCode,copyApiKey,toggleApiKeyEnabled,formatUptime,formatTime,statusText,levelText }
+      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,providerGuides,currentGuide,copyBtnText,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,openProviderSite,copyAutoCode,copyApiKey,toggleApiKeyEnabled,formatUptime,formatTime,statusText,levelText }
     }
   }).mount('#app')
   </script>
