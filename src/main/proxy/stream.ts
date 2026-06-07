@@ -19,7 +19,8 @@ export class SSEParser {
   parse(data: string): SSEEvent[] {
     this.buffer += data
     const events: SSEEvent[] = []
-    const lines = this.buffer.split('\n')
+    // Fix: handle both \n and \r\n line endings
+    const lines = this.buffer.split(/\r?\n/)
     this.buffer = lines.pop() || ''
 
     let currentEvent: Partial<SSEEvent> = {}
@@ -55,7 +56,8 @@ export class SSEParser {
           currentEvent.event = value
           break
         case 'data':
-          currentEvent.data = (currentEvent.data || '') + value
+          // Fix: join multi-line data with \n per SSE spec
+          currentEvent.data = currentEvent.data !== undefined ? currentEvent.data + '\n' + value : value
           break
         case 'id':
           currentEvent.id = value
@@ -483,8 +485,9 @@ export class StreamHandler {
             if (data.choices?.[0]?.finish_reason) {
               finishReason = data.choices[0].finish_reason
             }
-          } catch {
-            // Ignore parse errors
+          } catch (parseErr) {
+            // Log parse errors instead of silently dropping data
+            console.warn('[SSE] JSON parse error in stream-to-response:', (parseErr as Error).message, '| data:', event.data?.substring(0, 100))
           }
         }
       })

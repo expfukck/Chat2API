@@ -573,6 +573,12 @@ export class KimiStreamHandler {
     const created = unixTimestamp()
     let buffer = Buffer.alloc(0)
     let sentRole = false
+    let streamEnded = false
+    const safeEnd = () => {
+      if (streamEnded) return
+      streamEnded = true
+      transStream.end('data: [DONE]\n\n')
+    }
 
     stream.on('data', (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk])
@@ -581,12 +587,12 @@ export class KimiStreamHandler {
 
     stream.once('error', (err: Error) => {
       console.error('[Kimi] Stream error:', err.message)
-      if (!transStream.closed) transStream.end('data: [DONE]\n\n')
+      safeEnd()
     })
 
     stream.once('close', () => {
       console.log('[Kimi] Stream closed, realChatId:', this.realChatId, 'lastMessageId:', this.lastMessageId)
-      if (!transStream.closed) transStream.end('data: [DONE]\n\n')
+      safeEnd()
     })
 
     return transStream

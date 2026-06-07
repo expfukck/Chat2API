@@ -726,6 +726,15 @@ export class GLMStreamHandler {
     let sentContent = ''
     let sentReasoning = ''
     let sentRole = false
+    let streamEnded = false
+
+    const safeEnd = (finalData?: string) => {
+      if (streamEnded) return
+      streamEnded = true
+      if (finalData) transStream.write(finalData)
+      transStream.end()
+      this.onEnd?.()
+    }
 
     transStream.write(
       `data: ${JSON.stringify({
@@ -883,8 +892,7 @@ export class GLMStreamHandler {
                 created: this.created,
               })}\n\n`
             )
-            transStream.end('data: [DONE]\n\n')
-            this.onEnd?.()
+            safeEnd('data: [DONE]\n\n')
           }
         } catch (err) {
           console.error('[GLM] Stream parse error:', err)
@@ -898,6 +906,7 @@ export class GLMStreamHandler {
     // Handle stream errors - ensure proper cleanup
     stream.once('error', (err: Error) => {
       console.error('[GLM] Stream error:', err.message)
+      if (streamEnded) return
       // Flush any remaining tool call buffer
       const baseChunk = createBaseChunk(this.conversationId, this.model, this.created)
       const flushChunks = this.toolStreamParser?.flush(baseChunk) ?? []
@@ -914,33 +923,29 @@ export class GLMStreamHandler {
           created: this.created,
         })}\n\n`
       )
-      transStream.end('data: [DONE]\n\n')
-      this.onEnd?.()
+      safeEnd('data: [DONE]\n\n')
     })
 
     // Handle stream close - ensure proper cleanup if not already finished
     stream.once('close', () => {
       console.log('[GLM] Stream closed')
-      // Only send finish if we haven't already
-      if (!transStream.closed) {
-        const baseChunk = createBaseChunk(this.conversationId, this.model, this.created)
-        const flushChunks = this.toolStreamParser?.flush(baseChunk) ?? []
-        for (const outChunk of flushChunks) {
-          transStream.write(`data: ${JSON.stringify(outChunk)}\n\n`)
-        }
-        const finishReason = this.toolStreamParser?.hasEmittedToolCall() ? 'tool_calls' : 'stop'
-        transStream.write(
-          `data: ${JSON.stringify({
-            id: this.conversationId,
-            model: this.model,
-            object: 'chat.completion.chunk',
-            choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
-            created: this.created,
-          })}\n\n`
-        )
-        transStream.end('data: [DONE]\n\n')
-        this.onEnd?.()
+      if (streamEnded) return
+      const baseChunk = createBaseChunk(this.conversationId, this.model, this.created)
+      const flushChunks = this.toolStreamParser?.flush(baseChunk) ?? []
+      for (const outChunk of flushChunks) {
+        transStream.write(`data: ${JSON.stringify(outChunk)}\n\n`)
       }
+      const finishReason = this.toolStreamParser?.hasEmittedToolCall() ? 'tool_calls' : 'stop'
+      transStream.write(
+        `data: ${JSON.stringify({
+          id: this.conversationId,
+          model: this.model,
+          object: 'chat.completion.chunk',
+          choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
+          created: this.created,
+        })}\n\n`
+      )
+      safeEnd('data: [DONE]\n\n')
     })
 
     return transStream

@@ -340,6 +340,28 @@ router.post('/completions', async (ctx: Context) => {
       // Create a wrapper stream to handle errors and collect content
       const wrapperStream = new PassThrough()
 
+      // === Docker fix: Client abort detection ===
+      // When client disconnects, destroy upstream stream to free resources
+      let clientAborted = false
+      ctx.req.on('close', () => {
+        clientAborted = true
+        clearInterval(keepAliveTimer)
+        try { result.stream.destroy() } catch {}
+        try { wrapperStream.destroy() } catch {}
+        console.log('[Chat] Client disconnected, upstream stream destroyed')
+      })
+
+      // === Docker fix: SSE keep-alive heartbeat ===
+      // Send periodic SSE comments to prevent proxy timeouts during long streams
+      const keepAliveTimer = setInterval(() => {
+        if (clientAborted) { clearInterval(keepAliveTimer); return }
+        try { wrapperStream.write(': ping\n\n') } catch {}
+      }, 30000) // Every 30 seconds
+
+      // Clean up timer when stream ends
+      wrapperStream.once('end', () => clearInterval(keepAliveTimer))
+      wrapperStream.once('close', () => clearInterval(keepAliveTimer))
+
       // Collect stream content for logging (raw SSE output)
       let collectedContent = ''
 

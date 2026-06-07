@@ -7,6 +7,7 @@ export class ToolStreamParser {
   private isBufferingToolCall = false
   private emittedToolCall = false
   private nextToolCallIndex = 0
+  private static readonly MAX_BUFFER_SIZE = 500000 // 500KB limit to prevent memory issues
 
   constructor(plan: ToolCallingPlan) {
     this.plan = plan
@@ -16,6 +17,19 @@ export class ToolStreamParser {
     if (!content || !this.plan.shouldParseResponse) return []
 
     this.buffer += content
+
+    // Safety: prevent unbounded buffer growth
+    if (this.buffer.length > ToolStreamParser.MAX_BUFFER_SIZE) {
+      console.warn(`[ToolStreamParser] Buffer exceeded ${ToolStreamParser.MAX_BUFFER_SIZE} bytes, flushing as content`)
+      const chunks: any[] = []
+      if (this.isBufferingToolCall) {
+        chunks.push(createContentChunk(baseChunk, this.buffer, includeRole))
+      }
+      this.buffer = ''
+      this.isBufferingToolCall = false
+      return chunks
+    }
+
     const chunks: any[] = []
 
     if (!this.isBufferingToolCall) {

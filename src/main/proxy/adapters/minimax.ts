@@ -850,7 +850,7 @@ export class MiniMaxAdapter {
                   created,
                 })}\n\n`
               )
-              transStream.end('data: [DONE]\n\n')
+              safeEnd('data: [DONE]\n\n')
               if (onEnd) {
                 onEnd(chatId).catch(err => console.error('[MiniMax] Failed to delete chat:', err))
               }
@@ -862,10 +862,10 @@ export class MiniMaxAdapter {
         }
         
         console.log('[MiniMax] Stream timeout after', maxPolls, 'polls')
-        transStream.end('data: [DONE]\n\n')
+        safeEnd('data: [DONE]\n\n')
       } catch (err) {
         console.error('[MiniMax] Polling error:', err)
-        transStream.end('data: [DONE]\n\n')
+        safeEnd('data: [DONE]\n\n')
       }
     }
     
@@ -1083,6 +1083,13 @@ export class MiniMaxStreamHandler {
     let hasReceivedData = false
     let httpStatus: number | null = null
     let buffer = ''
+    let streamEnded = false
+    const safeEnd = (data?: string) => {
+      if (streamEnded) return
+      streamEnded = true
+      if (data) transStream.write(data)
+      safeEnd()
+    }
 
     console.log('[MiniMax] Starting stream handler...')
 
@@ -1105,7 +1112,7 @@ export class MiniMaxStreamHandler {
 
         // Emit error event on the transform stream for the client to handle
         transStream.emit('error', new Error(errorMessage))
-        transStream.end()
+        safeEnd()
         return
       }
     })
@@ -1142,7 +1149,7 @@ export class MiniMaxStreamHandler {
                 created: this.created,
               })}\n\n`
             )
-            transStream.end('data: [DONE]\n\n')
+            safeEnd('data: [DONE]\n\n')
             if (this.onEnd) this.onEnd(this.chatId)
             return
           }
@@ -1207,14 +1214,14 @@ export class MiniMaxStreamHandler {
                   created: this.created,
                 })}\n\n`
               )
-              transStream.end('data: [DONE]\n\n')
+              safeEnd('data: [DONE]\n\n')
               if (this.onEnd) this.onEnd(this.chatId)
             }
           }
         } catch (err) {
           console.error('[MiniMax] Stream parse error:', err)
           transStream.emit('error', err instanceof Error ? err : new Error(String(err)))
-          transStream.end()
+          safeEnd()
         }
       }
     })
@@ -1259,7 +1266,7 @@ export class MiniMaxStreamHandler {
                   created: this.created,
                 })}\n\n`
               )
-              transStream.end('data: [DONE]\n\n')
+              safeEnd('data: [DONE]\n\n')
               if (this.onEnd) this.onEnd(this.chatId)
               return
             }
@@ -1304,7 +1311,7 @@ export class MiniMaxStreamHandler {
               )
 
               if (isEnd === 0) {
-                transStream.end('data: [DONE]\n\n')
+                safeEnd('data: [DONE]\n\n')
                 if (this.onEnd) this.onEnd(this.chatId)
               }
             }
@@ -1319,7 +1326,7 @@ export class MiniMaxStreamHandler {
     stream.once('error', (err: Error) => {
       console.error('[MiniMax] Stream error:', err)
       transStream.emit('error', err)
-      transStream.end()
+      safeEnd()
     })
 
     stream.once('close', () => {
@@ -1335,7 +1342,7 @@ export class MiniMaxStreamHandler {
       }
       // Only end gracefully if we received data successfully
       if (hasReceivedData || (httpStatus && httpStatus < 400)) {
-        transStream.end('data: [DONE]\n\n')
+        safeEnd('data: [DONE]\n\n')
       }
     })
 

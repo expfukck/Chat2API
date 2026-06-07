@@ -35,12 +35,21 @@ export function isAnthropicToolFormat(toolFormat?: string): boolean {
  * Convert OpenAI tool_calls to Anthropic tool_use format
  */
 export function openaiToAnthropicToolCalls(toolCalls: ToolCall[]): AnthropicToolUse[] {
-  return toolCalls.map(tc => ({
-    type: 'tool_use' as const,
-    id: tc.id,
-    name: tc.function.name,
-    input: JSON.parse(tc.function.arguments),
-  }))
+  return toolCalls.map(tc => {
+    let input: any = {}
+    try {
+      input = tc.function.arguments ? JSON.parse(tc.function.arguments) : {}
+    } catch (e) {
+      console.warn('[ToolFormatConverter] Failed to parse tool call arguments:', (e as Error).message, '| args:', tc.function.arguments?.substring(0, 100))
+      input = { _raw: tc.function.arguments || '' }
+    }
+    return {
+      type: 'tool_use' as const,
+      id: tc.id,
+      name: tc.function.name,
+      input,
+    }
+  })
 }
 
 /**
