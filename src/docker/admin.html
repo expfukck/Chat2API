@@ -649,21 +649,21 @@
 
       const navItems=[{key:'dashboard',icon:'📊'},{key:'providers',icon:'🏢'},{key:'accounts',icon:'👤'},{key:'models',icon:'🧩'},{key:'mappings',icon:'🔀'},{key:'prompts',icon:'💬'},{key:'apikeys',icon:'🔑'},{key:'sessions',icon:'🗂️'},{key:'requestLogs',icon:'📋'},{key:'logs',icon:'📝'},{key:'settings',icon:'⚙️'}]
       const providerNames={deepseek:'DeepSeek',kimi:'Kimi',glm:'GLM',qwen:'Qwen',minimax:'MiniMax',perplexity:'Perplexity',mimo:'MiMo',zai:'Z.ai'}
-      const credFields={deepseek:'userToken',kimi:'token',glm:'refreshToken',qwen:'tongyi_sso_ticket',minimax:'token',perplexity:'cookie',mimo:'cookie',zai:'token'}
+      const credFields={deepseek:'token',kimi:'token',glm:'refresh_token',qwen:'ticket',minimax:'token',perplexity:'cookie',mimo:'service_token',zai:'token'}
 
       const copyBtnText = ref(lang.value==='zh'?'复制':'Copy')
 
       const providerGuides = [
-        { id:'deepseek', name:'DeepSeek', loginUrl:'https://chat.deepseek.com', tokenKey:'userToken', tokenLabel:'User Token',
+        { id:'deepseek', name:'DeepSeek', loginUrl:'https://chat.deepseek.com', tokenKey:'token', tokenLabel:'Token',
           autoCode: `var t=JSON.parse(localStorage.getItem("ds_chat_token")||"{}").access_token||localStorage.getItem("userToken");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'kimi', name:'Kimi', loginUrl:'https://kimi.moonshot.cn', tokenKey:'token', tokenLabel:'JWT Token',
           autoCode: `var t=localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'glm', name:'GLM（智谱清言）', loginUrl:'https://chatglm.cn', tokenKey:'refreshToken', tokenLabel:'Refresh Token',
-          autoCode: `var t=localStorage.getItem("refresh_token")||localStorage.getItem("token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
+        { id:'glm', name:'GLM（智谱清言）', loginUrl:'https://chatglm.cn', tokenKey:'refresh_token', tokenLabel:'Refresh Token',
+          autoCode: `var t=localStorage.getItem("chatglm_refresh_token")||localStorage.getItem("refresh_token")||localStorage.getItem("token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'qwen', name:'Qwen（通义千问）', loginUrl:'https://tongyi.aliyun.com', tokenKey:'tongyi_sso_ticket', tokenLabel:'SSO Ticket',
+        { id:'qwen', name:'Qwen（通义千问）', loginUrl:'https://tongyi.aliyun.com', tokenKey:'ticket', tokenLabel:'SSO Ticket',
           autoCode: `var t=document.cookie.match(/tongyi_sso_ticket=([^;]+)/);t=t?t[1]:"";if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Ticket sent!")}else{console.log("❌ Not logged in")}`
         },
         { id:'minimax', name:'MiniMax', loginUrl:'https://chat.minimaxi.com', tokenKey:'token', tokenLabel:'JWT Token',
@@ -672,8 +672,8 @@
         { id:'perplexity', name:'Perplexity', loginUrl:'https://www.perplexity.ai', tokenKey:'cookie', tokenLabel:'Cookie',
           autoCode: `var t=document.cookie;if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Cookie sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'mimo', name:'MiMo', loginUrl:'https://mimo.xiaomi.com', tokenKey:'cookie', tokenLabel:'Cookie',
-          autoCode: `var t=document.cookie;if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Cookie sent!")}else{console.log("❌ Not logged in")}`
+        { id:'mimo', name:'MiMo', loginUrl:'https://mimo.xiaomi.com', tokenKey:'service_token', tokenLabel:'Service Token',
+          autoCode: `var t=localStorage.getItem("service_token")||document.cookie.match(/service_token=([^;]+)/)?.[1]||"";if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in - try F12 Application tab to find token key")}`
         },
         { id:'zai', name:'Z.ai', loginUrl:'https://z.ai', tokenKey:'token', tokenLabel:'JWT Token',
           autoCode: `var t=localStorage.getItem("token")||localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
