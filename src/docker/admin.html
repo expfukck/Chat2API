@@ -181,6 +181,7 @@
                   <td class="px-3 py-2"><span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-600 rounded text-xs">{{ providerNames[a.providerId]||a.providerId }}</span></td>
                   <td class="px-3 py-2"><span :class="['px-2 py-0.5 rounded text-xs', a.status==='active'?'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300':'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300']">{{ statusText(a.status) }}</span></td>
                   <td class="px-3 py-2 flex gap-2 flex-wrap">
+                    <button @click="testAccount(a)" class="text-purple-500 text-xs">{{ t('test') }}</button>
                     <button @click="validateAccount(a.id)" class="text-blue-500 hover:text-blue-700 text-xs">{{ t('validate') }}</button>
                     <button @click="clearAccountChats(a.id)" class="text-yellow-600 hover:text-yellow-800 text-xs">{{ t('clearChats') }}</button>
                     <button @click="deleteAccount(a.id)" class="text-red-500 hover:text-red-700 text-xs">{{ t('delete') }}</button>
@@ -581,9 +582,15 @@
 
           <div class="mb-3"><label class="text-sm text-gray-600 dark:text-gray-300">{{ t('accountName') }}</label>
             <input v-model="form.name" :placeholder="lang==='zh'?'例：我的 DeepSeek':'e.g. My DeepSeek'" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1"></div>
-          <div class="mb-3">
-            <label class="text-sm text-gray-600 dark:text-gray-300">{{ currentGuide?.tokenLabel || 'Token' }}</label>
-            <textarea v-model="form.token" rows="2" :placeholder="lang==='zh'?'Token 自动填入，或手动粘贴':'Auto-fills or paste manually'" class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1 font-mono text-xs" :class="form.token ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : ''"></textarea>
+          <!-- Dynamic credential fields -->
+          <div v-for="field in currentCredFields" :key="field.key" class="mb-3">
+            <label class="text-sm text-gray-600 dark:text-gray-300">
+              {{ field.label }}
+              <span v-if="field.optional" class="text-xs text-gray-400">({{ lang==='zh'?'可选':'optional' }})</span>
+            </label>
+            <input v-model="form.creds[field.key]" type="text" :placeholder="field.placeholder"
+              class="w-full px-3 py-2 border dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded mt-1 font-mono text-xs"
+              :class="form.creds[field.key] ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : ''">
           </div>
         </div>
         <!-- 添加提示词 -->
@@ -622,7 +629,7 @@
   <script>
   const { createApp, ref, reactive, computed, onMounted, watch } = Vue
   const i18n = {
-    zh: { subtitle:'管理后台',secret:'管理密钥',apiBase:'API 地址',login:'登 录',logout:'退出',dashboard:'仪表盘',providers:'服务商',accounts:'账号管理',models:'模型管理',mappings:'模型映射',prompts:'系统提示词',apikeys:'API 密钥',sessions:'会话管理',requestLogs:'请求日志',logs:'系统日志',settings:'设置',status:'服务状态',port:'监听端口',uptime:'运行时间',connections:'活跃连接',running:'运行中',stopped:'已停止',totalRequests:'总请求数',successRate:'成功率',avgLatency:'平均延迟',dailyTrend:'每日趋势',success:'成功',failed:'失败',proxyControl:'代理控制',start:'启动',stop:'停止',restart:'重启',name:'名称',provider:'服务商',account:'账号',actions:'操作',add:'添加',delete:'删除',edit:'编辑',create:'创建',validate:'验证',remove:'移除',noData:'暂无数据',displayName:'显示名称',actualModel:'实际模型',type:'类型',custom:'自定义',builtIn:'内置',addCustomModel:'添加自定义模型',description:'描述',content:'内容',key:'密钥',usage:'使用次数',messages:'消息',active:'活跃',expired:'已过期',clearAll:'清空全部',time:'时间',level:'级别',model:'模型',latency:'延迟',all:'全部',refresh:'刷新',error:'错误',warn:'警告',info:'信息',confirm:'确认',close:'关闭',contextMgmt:'上下文管理',enabled:'启用',strategy:'策略',slidingWindow:'滑动窗口',tokenLimit:'Token 限制',summary:'摘要压缩',maxMessages:'最大消息数',maxTokens:'最大 Token 数',toolCalling:'工具调用 (Function Calling)',mode:'模式',off:'关闭',auto:'自动',force:'强制',clientAdapter:'客户端适配器',otherSettings:'其他设置',loadBalance:'负载均衡',roundRobin:'轮询',fillFirst:'填满优先',failover:'故障转移',logLevel:'日志级别',requestTimeout:'请求超时',retryCount:'重试次数',userInput:'用户输入',response:'AI 响应',expandBody:'展开完整内容',collapse:'收起',enable:'启用',disable:'禁用',online:'在线',offline:'离线',enabled2:'已启用',disabled2:'已禁用',accountCount:'账号数',clearChats:'清除聊天记录',exportData:'导出数据',importData:'导入数据',clearData:'清空数据',dataMgmt:'数据管理',requestModel:'请求模型',mapTo:'映射到',addMapping:'添加映射',copy:'复制',show:'显示',hide:'隐藏',search:'搜索',today:'今日',yesterday:'昨日',providerStatus:'服务商状态',recentActivity:'最近活动',getToken:'获取 Token 教程',openSite:'打开网站',extractScript:'一键提取脚本',pasteInConsole:'在 Provider 网站的 F12 Console 中粘贴运行',accountName:'账号名称',checkUpdate:'检查更新',newVersion:'有新版本',currentVersion:'当前版本', },
+    zh: { subtitle:'管理后台',secret:'管理密钥',apiBase:'API 地址',login:'登 录',logout:'退出',dashboard:'仪表盘',providers:'服务商',accounts:'账号管理',models:'模型管理',mappings:'模型映射',prompts:'系统提示词',apikeys:'API 密钥',sessions:'会话管理',requestLogs:'请求日志',logs:'系统日志',settings:'设置',status:'服务状态',port:'监听端口',uptime:'运行时间',connections:'活跃连接',running:'运行中',stopped:'已停止',totalRequests:'总请求数',successRate:'成功率',avgLatency:'平均延迟',dailyTrend:'每日趋势',success:'成功',failed:'失败',proxyControl:'代理控制',start:'启动',stop:'停止',restart:'重启',name:'名称',provider:'服务商',account:'账号',actions:'操作',add:'添加',delete:'删除',edit:'编辑',create:'创建',validate:'验证',remove:'移除',noData:'暂无数据',displayName:'显示名称',actualModel:'实际模型',type:'类型',custom:'自定义',builtIn:'内置',addCustomModel:'添加自定义模型',description:'描述',content:'内容',key:'密钥',usage:'使用次数',messages:'消息',active:'活跃',expired:'已过期',clearAll:'清空全部',time:'时间',level:'级别',model:'模型',latency:'延迟',all:'全部',refresh:'刷新',error:'错误',warn:'警告',info:'信息',confirm:'确认',close:'关闭',contextMgmt:'上下文管理',enabled:'启用',strategy:'策略',slidingWindow:'滑动窗口',tokenLimit:'Token 限制',summary:'摘要压缩',maxMessages:'最大消息数',maxTokens:'最大 Token 数',toolCalling:'工具调用 (Function Calling)',mode:'模式',off:'关闭',auto:'自动',force:'强制',clientAdapter:'客户端适配器',otherSettings:'其他设置',loadBalance:'负载均衡',roundRobin:'轮询',fillFirst:'填满优先',failover:'故障转移',logLevel:'日志级别',requestTimeout:'请求超时',retryCount:'重试次数',userInput:'用户输入',response:'AI 响应',expandBody:'展开完整内容',collapse:'收起',enable:'启用',disable:'禁用',online:'在线',offline:'离线',enabled2:'已启用',disabled2:'已禁用',accountCount:'账号数',clearChats:'清除聊天记录',exportData:'导出数据',importData:'导入数据',clearData:'清空数据',dataMgmt:'数据管理',requestModel:'请求模型',mapTo:'映射到',addMapping:'添加映射',copy:'复制',show:'显示',hide:'隐藏',search:'搜索',today:'今日',yesterday:'昨日',providerStatus:'服务商状态',recentActivity:'最近活动',getToken:'获取 Token 教程',openSite:'打开网站',extractScript:'一键提取脚本',pasteInConsole:'在 Provider 网站的 F12 Console 中粘贴运行',accountName:'账号名称',checkUpdate:'检查更新',newVersion:'有新版本',currentVersion:'当前版本',test:'测试', },
     en: { subtitle:'Admin Panel',secret:'Management Secret',apiBase:'API Base URL',login:'Login',logout:'Logout',dashboard:'Dashboard',providers:'Providers',accounts:'Accounts',models:'Models',mappings:'Model Mappings',prompts:'System Prompts',apikeys:'API Keys',sessions:'Sessions',requestLogs:'Request Logs',logs:'System Logs',settings:'Settings',status:'Status',port:'Port',uptime:'Uptime',connections:'Connections',running:'Running',stopped:'Stopped',totalRequests:'Total Requests',successRate:'Success Rate',avgLatency:'Avg Latency',dailyTrend:'Daily Trend',success:'Success',failed:'Failed',proxyControl:'Proxy Control',start:'Start',stop:'Stop',restart:'Restart',name:'Name',provider:'Provider',account:'Account',actions:'Actions',add:'Add',delete:'Delete',edit:'Edit',create:'Create',validate:'Validate',remove:'Remove',noData:'No data',displayName:'Display Name',actualModel:'Actual Model',type:'Type',custom:'Custom',builtIn:'Built-in',addCustomModel:'Add Custom Model',description:'Description',content:'Content',key:'Key',usage:'Usage',messages:'messages',active:'Active',expired:'Expired',clearAll:'Clear All',time:'Time',level:'Level',model:'Model',latency:'Latency',all:'All',refresh:'Refresh',error:'Error',warn:'Warning',info:'Info',confirm:'Confirm',close:'Close',contextMgmt:'Context Management',enabled:'Enabled',strategy:'Strategy',slidingWindow:'Sliding Window',tokenLimit:'Token Limit',summary:'Summary',maxMessages:'Max Messages',maxTokens:'Max Tokens',toolCalling:'Tool Calling (Function Calling)',mode:'Mode',off:'Off',auto:'Auto',force:'Force',clientAdapter:'Client Adapter',otherSettings:'Other Settings',loadBalance:'Load Balance',roundRobin:'Round Robin',fillFirst:'Fill First',failover:'Failover',logLevel:'Log Level',requestTimeout:'Request Timeout',retryCount:'Retry Count',userInput:'User Input',response:'AI Response',expandBody:'Expand Full Content',collapse:'Collapse',enable:'Enable',disable:'Disable',online:'Online',offline:'Offline',enabled2:'Enabled',disabled2:'Disabled',accountCount:'Accounts',clearChats:'Clear Chats',exportData:'Export Data',importData:'Import Data',clearData:'Clear Data',dataMgmt:'Data Management',requestModel:'Request Model',mapTo:'Map To',addMapping:'Add Mapping',copy:'Copy',show:'Show',hide:'Hide',search:'Search',today:'Today',yesterday:'Yesterday',providerStatus:'Provider Status',recentActivity:'Recent Activity',getToken:'Get Token Guide',openSite:'Open Site',extractScript:'Extract Script',pasteInConsole:'Paste in Provider site F12 Console',accountName:'Account Name',checkUpdate:'Check Update',newVersion:'New version available',currentVersion:'Current version', },
   }
   createApp({
@@ -643,7 +650,7 @@
       const providers=ref([]), selectedProvider=ref('deepseek')
       const logFilter=ref(''), reqLogFilter=ref('')
       const modal=ref(null), modalTitle=ref('')
-      const form=reactive({providerId:'deepseek',name:'',token:'',description:'',content:'',id:'',requestModel:'',actualModel:'',mappingProvider:''})
+      const form=reactive({providerId:'deepseek',name:'',token:'',description:'',content:'',id:'',requestModel:'',actualModel:'',mappingProvider:'',creds:{}})
       const newModel=reactive({displayName:'',actualModelId:''})
       const settingsConfig=reactive({contextManagement:{enabled:false,strategy:'slidingWindow',maxMessages:20,maxTokens:4000},toolCallingConfig:{enabled:true,mode:'auto',clientAdapterId:'standard-openai-tools'},loadBalanceStrategy:'round_robin',logLevel:'info',requestTimeout:60000,retryCount:3})
 
@@ -653,34 +660,57 @@
 
       const copyBtnText = ref(lang.value==='zh'?'复制':'Copy')
 
+      // Multi-field credential definitions per provider
+      const providerCredFields = {
+        deepseek: [{ key:'token', label:'Token', placeholder:'DeepSeek API Token' }],
+        kimi:     [{ key:'token', label:'JWT Token', placeholder:'Kimi Access Token' }],
+        glm:      [{ key:'refresh_token', label:'Refresh Token', placeholder:'GLM Refresh Token' }],
+        qwen:     [{ key:'ticket', label:'SSO Ticket', placeholder:'tongyi_sso_ticket from Cookie' }],
+        minimax:  [
+          { key:'token', label:'JWT Token', placeholder:'MiniMax Token' },
+          { key:'realUserID', label:'User ID（可选）', placeholder:'MiniMax Real User ID', optional:true },
+        ],
+        perplexity: [{ key:'cookie', label:'Cookie', placeholder:'Full Cookie string from perplexity.ai' }],
+        mimo:     [
+          { key:'service_token', label:'Service Token', placeholder:'MiMo Service Token' },
+          { key:'user_id', label:'User ID', placeholder:'MiMo User ID' },
+          { key:'ph_token', label:'PH Token', placeholder:'MiMo PH Token' },
+        ],
+        zai:      [
+          { key:'token', label:'JWT Token', placeholder:'Z.ai Token' },
+          { key:'captcha_verify_param', label:'Captcha Param（可选）', placeholder:'Captcha Verify Param', optional:true },
+        ],
+      }
+
       const providerGuides = [
-        { id:'deepseek', name:'DeepSeek', loginUrl:'https://chat.deepseek.com', tokenKey:'token', tokenLabel:'Token',
+        { id:'deepseek', name:'DeepSeek', loginUrl:'https://chat.deepseek.com',
           autoCode: `var t=JSON.parse(localStorage.getItem("ds_chat_token")||"{}").access_token||localStorage.getItem("userToken");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'kimi', name:'Kimi', loginUrl:'https://kimi.moonshot.cn', tokenKey:'token', tokenLabel:'JWT Token',
+        { id:'kimi', name:'Kimi', loginUrl:'https://kimi.moonshot.cn',
           autoCode: `var t=localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'glm', name:'GLM（智谱清言）', loginUrl:'https://chatglm.cn', tokenKey:'refresh_token', tokenLabel:'Refresh Token',
+        { id:'glm', name:'GLM（智谱清言）', loginUrl:'https://chatglm.cn',
           autoCode: `var t=localStorage.getItem("chatglm_refresh_token")||localStorage.getItem("refresh_token")||localStorage.getItem("token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'qwen', name:'Qwen（通义千问）', loginUrl:'https://tongyi.aliyun.com', tokenKey:'ticket', tokenLabel:'SSO Ticket',
+        { id:'qwen', name:'Qwen（通义千问）', loginUrl:'https://tongyi.aliyun.com',
           autoCode: `var t=document.cookie.match(/tongyi_sso_ticket=([^;]+)/);t=t?t[1]:"";if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Ticket sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'minimax', name:'MiniMax', loginUrl:'https://chat.minimaxi.com', tokenKey:'token', tokenLabel:'JWT Token',
+        { id:'minimax', name:'MiniMax', loginUrl:'https://chat.minimaxi.com',
           autoCode: `var t=localStorage.getItem("token")||localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'perplexity', name:'Perplexity', loginUrl:'https://www.perplexity.ai', tokenKey:'cookie', tokenLabel:'Cookie',
+        { id:'perplexity', name:'Perplexity', loginUrl:'https://www.perplexity.ai',
           autoCode: `var t=document.cookie;if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Cookie sent!")}else{console.log("❌ Not logged in")}`
         },
-        { id:'mimo', name:'MiMo', loginUrl:'https://aistudio.xiaomimimo.com', tokenKey:'service_token', tokenLabel:'Service Token',
-          autoCode: `var t=localStorage.getItem("service_token")||document.cookie.match(/service_token=([^;]+)/)?.[1]||"";if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in - try F12 Application tab to find token key")}`
+        { id:'mimo', name:'MiMo', loginUrl:'https://aistudio.xiaomimimo.com',
+          autoCode: `var s=localStorage.getItem("service_token")||"",u=localStorage.getItem("user_id")||"",p=localStorage.getItem("ph_token")||"";if(s){window.opener.postMessage({type:"chat2api-token",token:s,extra:{user_id:u,ph_token:p}},"*");console.log("✅ Tokens sent!")}else{console.log("❌ Not logged in - check F12 Application > Local Storage for service_token, user_id, ph_token")}`
         },
-        { id:'zai', name:'Z.ai', loginUrl:'https://z.ai', tokenKey:'token', tokenLabel:'JWT Token',
+        { id:'zai', name:'Z.ai', loginUrl:'https://z.ai',
           autoCode: `var t=localStorage.getItem("token")||localStorage.getItem("access_token");if(t){window.opener.postMessage({type:"chat2api-token",token:t},"*");console.log("✅ Token sent!")}else{console.log("❌ Not logged in")}`
         },
       ]
 
       const currentGuide = computed(() => providerGuides.find(p => p.id === form.providerId))
+      const currentCredFields = computed(() => providerCredFields[form.providerId] || [{ key:'token', label:'Token', placeholder:'Token' }])
 
       function openProviderSite(id) {
         const g = providerGuides.find(p => p.id === id)
@@ -694,7 +724,6 @@
         const g = currentGuide.value
         if (!g) return
         const code = g.autoCode
-        // Try modern clipboard first
         if (navigator.clipboard && window.isSecureContext) {
           navigator.clipboard.writeText(code).then(() => showCopyOk()).catch(() => fbCopy(code))
         } else { fbCopy(code) }
@@ -709,26 +738,26 @@
       }
 
       // === Token auto-fill from bookmarklet callback ===
-      function handleTokenReceived(token, provider) {
+      function handleTokenReceived(token, provider, extra) {
         if (!token) return
-        form.token = token
+        // Fill the first credential field
+        const fields = providerCredFields[provider || form.providerId] || [{key:'token'}]
+        form.creds[fields[0].key] = token
+        // Fill extra fields (e.g. MiMo sends user_id, ph_token)
+        if (extra) { for (const [k,v] of Object.entries(extra)) { if (v) form.creds[k] = v } }
         if (provider) form.providerId = provider
-        // Visual feedback on the textarea
+        // Visual feedback
         setTimeout(() => {
-          const textareas = document.querySelectorAll('textarea')
-          const last = textareas[textareas.length - 1]
-          if (last) {
-            last.style.borderColor = '#22c55e'
-            last.style.backgroundColor = '#f0fdf4'
-            setTimeout(() => { last.style.borderColor = ''; last.style.backgroundColor = '' }, 3000)
-          }
+          const inputs = document.querySelectorAll('input.font-mono')
+          inputs.forEach(el => { if (el.value) { el.style.borderColor = '#22c55e'; el.style.backgroundColor = '#f0fdf4' } })
+          setTimeout(() => { inputs.forEach(el => { el.style.borderColor = ''; el.style.backgroundColor = '' }) }, 3000)
         }, 100)
       }
 
       // Listen for postMessage from callback page
       window.addEventListener('message', (event) => {
         if (event.data?.type === 'chat2api-token' && event.data.token) {
-          handleTokenReceived(event.data.token, event.data.provider)
+          handleTokenReceived(event.data.token, event.data.provider, event.data.extra)
         }
       })
 
@@ -741,6 +770,42 @@
           openModal('addAccount')
           handleTokenReceived(urlToken, urlParams.get('provider'))
         }, 500)
+      }
+
+      // === Test account ===
+      async function testAccount(account) {
+        const btn = event.target
+        const orig = btn.textContent
+        btn.textContent = lang.value==='zh'?'测试中...':'Testing...'
+        btn.disabled = true
+        try {
+          // Get provider models to pick a random one
+          const modelsRes = await api('/models')
+          const providerModels = (modelsRes.data || []).filter(m => m.id?.toLowerCase().includes(account.providerId) || m.owned_by === account.providerId)
+          const model = providerModels.length ? providerModels[Math.floor(Math.random()*providerModels.length)].id : (account.providerId === 'deepseek' ? 'deepseek-v4-flash' : account.providerId === 'glm' ? 'GLM-5.1' : 'deepseek-v4-flash')
+
+          const res = await fetch(`${apiBase.value}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: model,
+              messages: [{ role: 'user', content: 'Say hello in one word' }],
+              max_tokens: 10,
+            })
+          })
+          const data = await res.json()
+          if (data.choices?.[0]?.message?.content) {
+            btn.textContent = '✅ ' + data.choices[0].message.content.trim().substring(0,20)
+            btn.className = 'text-green-600 text-xs font-bold'
+          } else {
+            btn.textContent = '❌ ' + (data.error?.message || 'Failed').substring(0,30)
+            btn.className = 'text-red-600 text-xs'
+          }
+        } catch (e) {
+          btn.textContent = '❌ ' + e.message.substring(0,30)
+          btn.className = 'text-red-600 text-xs'
+        }
+        setTimeout(() => { btn.textContent = orig; btn.disabled = false; btn.className = 'text-purple-500 text-xs' }, 5000)
       }
 
       const dailyMax = computed(() => Math.max(1, ...dailyTrend.value.map(d=>(d.successRequests||0)+(d.failedRequests||0))))
@@ -830,9 +895,14 @@
         try { await api('/config', {method:'PUT',body:JSON.stringify({contextManagement:settingsConfig.contextManagement,toolCallingConfig:settingsConfig.toolCallingConfig,loadBalanceStrategy:settingsConfig.loadBalanceStrategy,logLevel:settingsConfig.logLevel,requestTimeout:settingsConfig.requestTimeout,retryCount:settingsConfig.retryCount})}) } catch(e){ alert(e.message) }
       }
 
-      function openModal(m) { modal.value=m; Object.assign(form,{providerId:'deepseek',name:'',token:'',description:'',content:'',id:'',requestModel:'',actualModel:'',mappingProvider:''}); if(m==='addPrompt') modalTitle.value=t('prompts')+' - '+t('add'); else if(m==='addAccount') modalTitle.value=t('accounts')+' - '+t('add'); else if(m==='addMapping') modalTitle.value=t('mappings')+' - '+t('add') }
+      function openModal(m) { modal.value=m; Object.assign(form,{providerId:'deepseek',name:'',token:'',description:'',content:'',id:'',requestModel:'',actualModel:'',mappingProvider:'',creds:{}}); if(m==='addPrompt') modalTitle.value=t('prompts')+' - '+t('add'); else if(m==='addAccount') modalTitle.value=t('accounts')+' - '+t('add'); else if(m==='addMapping') modalTitle.value=t('mappings')+' - '+t('add') }
       async function submitModal() {
-        if (modal.value==='addAccount') { const f=credFields[form.providerId]||'token'; await api('/accounts',{method:'POST',body:JSON.stringify({providerId:form.providerId,name:form.name,status:'active',credentials:{[f]:form.token}})}); modal.value=null; loadAccounts() }
+        if (modal.value==='addAccount') {
+          const creds = {}; const fields = providerCredFields[form.providerId] || [{key:'token'}]
+          for (const f of fields) { if (form.creds[f.key]) creds[f.key] = form.creds[f.key] }
+          if (!Object.keys(creds).length) { alert(lang.value==='zh'?'请至少填写一个凭证字段':'Please fill at least one credential'); return }
+          await api('/accounts',{method:'POST',body:JSON.stringify({providerId:form.providerId,name:form.name,status:'active',credentials:creds})}); modal.value=null; loadAccounts()
+        }
         else if (modal.value==='addPrompt') { await extApi('/prompts',{method:'POST',body:JSON.stringify({name:form.name,description:form.description,content:form.content,type:'custom'})}); modal.value=null; loadPrompts() }
         else if (modal.value==='editPrompt') { await extApi(`/prompts/${form.id}`,{method:'PUT',body:JSON.stringify({name:form.name,description:form.description,content:form.content})}); modal.value=null; loadPrompts() }
         else if (modal.value==='addMapping') { await api('/model-mappings',{method:'POST',body:JSON.stringify({requestModel:form.requestModel,actualModel:form.actualModel,providerId:form.mappingProvider||undefined})}); modal.value=null; loadMappings() }
@@ -875,7 +945,7 @@
         if(s) { secret.value=s; apiBase.value=b||(window.location.protocol+'//'+window.location.hostname+':18050'); login() }
       })
 
-      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,providerGuides,currentGuide,copyBtnText,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,openProviderSite,copyAutoCode,copyApiKey,toggleApiKeyEnabled,formatUptime,formatTime,statusText,levelText }
+      return { authenticated,secret,apiBase,adminBase,loginError,currentPage,lang,darkMode,t,health,stats,todayStats,accounts,apiKeys,logs,sessions,prompts,effectiveModels,requestLogs,dailyTrend,allProviders,modelMappings,providers,selectedProvider,logFilter,reqLogFilter,modal,modalTitle,form,newModel,settingsConfig,navItems,providerNames,providerGuides,currentGuide,copyBtnText,dailyMax,barH,login,logout,switchPage,loadHealth,loadStats,loadAccounts,loadProviders,loadAllProviders,loadApiKeys,loadSessions,loadLogs,loadRequestLogs,loadPrompts,loadModels,loadConfig,loadMappings,loadTodayStats,saveSettings,openModal,submitModal,editPrompt,deletePrompt,deleteAccount,validateAccount,createApiKey,deleteApiKey,deleteSession,clearSessions,viewSession,sessionMessages,addModel,removeModel,proxyAction,toggleProvider,getAccountCount,deleteMapping,clearAccountChats,exportData,importData,clearAllData,openProviderSite,copyAutoCode,testAccount,providerCredFields,currentCredFields,copyApiKey,toggleApiKeyEnabled,formatUptime,formatTime,statusText,levelText }
     }
   }).mount('#app')
   </script>
