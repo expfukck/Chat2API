@@ -343,7 +343,7 @@ export class KimiAdapter {
           'Content-Type': 'application/connect+json',
           ...FAKE_HEADERS,
         },
-        timeout: 120000,
+        timeout: 0,
         validateStatus: () => true,
         responseType: 'stream',
       }

@@ -532,7 +532,7 @@ export class ZaiAdapter {
           Priority: 'u=1, i',
         },
         responseType: 'stream',
-        timeout: 120000,
+        timeout: 0,
         validateStatus: () => true,
       }
     )

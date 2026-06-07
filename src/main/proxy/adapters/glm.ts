@@ -561,7 +561,7 @@ GLM STRICT RULES:
           'X-Timestamp': sign.timestamp,
           'X-Nonce': sign.nonce,
         },
-        timeout: 120000,
+        timeout: 0,
         validateStatus: () => true,
         responseType: 'stream',
       }

@@ -416,7 +416,7 @@ export class DeepSeekAdapter {
           Cookie: generateCookie(),
           'X-Ds-Pow-Response': challengeAnswer,
         },
-        timeout: 120000,
+        timeout: 0,
         validateStatus: () => true,
         responseType: 'stream',
       }

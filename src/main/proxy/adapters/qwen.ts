@@ -114,7 +114,7 @@ export class QwenAdapter {
   private provider: Provider
   private account: Account
   private axiosInstance = axios.create({
-    timeout: 120000,
+    timeout: 0,
     maxBodyLength: Infinity,
     maxContentLength: Infinity,
   })
@@ -423,7 +423,7 @@ export class QwenAdapter {
         Cookie: `tongyi_sso_ticket=${ticket}`,
       },
       responseType: 'stream',
-      timeout: 120000,
+      timeout: 0,
       decompress: false,
     })
 
