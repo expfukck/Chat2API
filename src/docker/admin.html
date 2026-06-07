@@ -775,37 +775,98 @@
       // === Test account ===
       async function testAccount(account) {
         const btn = event.target
-        const orig = btn.textContent
         btn.textContent = lang.value==='zh'?'测试中...':'Testing...'
         btn.disabled = true
-        try {
-          // Get provider models to pick a random one
-          const modelsRes = await api('/models')
-          const providerModels = (modelsRes.data || []).filter(m => m.id?.toLowerCase().includes(account.providerId) || m.owned_by === account.providerId)
-          const model = providerModels.length ? providerModels[Math.floor(Math.random()*providerModels.length)].id : (account.providerId === 'deepseek' ? 'deepseek-v4-flash' : account.providerId === 'glm' ? 'GLM-5.1' : 'deepseek-v4-flash')
+        btn.className = 'text-gray-400 text-xs'
 
-          const res = await fetch(`${apiBase.value}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: model,
-              messages: [{ role: 'user', content: 'Say hello in one word' }],
-              max_tokens: 10,
-            })
-          })
-          const data = await res.json()
-          if (data.choices?.[0]?.message?.content) {
-            btn.textContent = '✅ ' + data.choices[0].message.content.trim().substring(0,20)
+        try {
+          // Get all available models
+          const modelsRes = await fetch(`${apiBase.value}/v1/models`)
+          const allModels = (await modelsRes.json()).data || []
+
+          // Get model mappings from config to find models for this provider
+          const configRes = await api('/config')
+          const mappings = configRes.data?.modelMappings || {}
+
+          // Get effective models for this provider
+          let providerModels = []
+          try {
+            const effRes = await extApi(`/models/effective/${account.providerId}`)
+            providerModels = (effRes.data || []).map(m => m.actualModelId || m.displayName)
+          } catch(e) {}
+
+          // Also check model mappings for display names that might map to this provider's models
+          const mappingModels = Object.keys(mappings).filter(k => {
+            const m = mappings[k]
+            return m.providerId === account.providerId || !m.providerId
+          }).map(k => mappings[k]?.actualModel || k)
+
+          // Combine and deduplicate
+          const testModels = [...new Set([...providerModels, ...mappingModels])]
+
+          // If still empty, try common model names
+          if (testModels.length === 0) {
+            const defaults = {
+              deepseek: ['deepseek-v4-flash', 'deepseek-chat'],
+              glm: ['GLM-5.1', 'glm-5.1', 'glm-4-flash'],
+              kimi: ['Kimi-K2.6', 'kimi-latest'],
+              qwen: ['qwen-max', 'Qwen3.6', 'qwen-turbo'],
+              minimax: ['MiniMax-M2.7', 'minimax-chat'],
+              perplexity: ['auto', 'sonar'],
+              mimo: ['MiMo-V2.5-Pro', 'mimo-v1'],
+              zai: ['zai-latest'],
+            }
+            testModels.push(...(defaults[account.providerId] || ['deepseek-v4-flash']))
+          }
+
+          // Try each model until one succeeds
+          let lastError = ''
+          let successModel = ''
+          let successReply = ''
+
+          for (const model of testModels) {
+            try {
+              const res = await fetch(`${apiBase.value}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer test' },
+                body: JSON.stringify({
+                  model: model,
+                  messages: [{ role: 'user', content: 'Hi' }],
+                  max_tokens: 5,
+                })
+              })
+              if (res.ok) {
+                const data = await res.json()
+                if (data.choices?.[0]?.message?.content) {
+                  successModel = model
+                  successReply = data.choices[0].message.content.trim().substring(0, 20)
+                  break
+                }
+              } else {
+                const errData = await res.json().catch(() => ({}))
+                lastError = `HTTP ${res.status}`
+                // Skip 404 (model not found) and try next
+                if (res.status === 404) continue
+                // For other errors, record but continue
+                lastError = errData.error?.message?.substring(0, 30) || `HTTP ${res.status}`
+              }
+            } catch (e) {
+              lastError = e.message?.substring(0, 30) || 'Network error'
+            }
+          }
+
+          if (successModel) {
+            btn.textContent = `✅ ${successReply} (${successModel})`
             btn.className = 'text-green-600 text-xs font-bold'
           } else {
-            btn.textContent = '❌ ' + (data.error?.message || 'Failed').substring(0,30)
+            btn.textContent = `❌ ${lang.value==='zh'?'全部模型失败':'All models failed'}: ${lastError}`
             btn.className = 'text-red-600 text-xs'
           }
         } catch (e) {
-          btn.textContent = '❌ ' + e.message.substring(0,30)
+          btn.textContent = '❌ ' + (e.message?.substring(0, 30) || 'Error')
           btn.className = 'text-red-600 text-xs'
         }
-        setTimeout(() => { btn.textContent = orig; btn.disabled = false; btn.className = 'text-purple-500 text-xs' }, 5000)
+        setTimeout(() => { btn.textContent = lang.value==='zh'?'测试':'Test'; btn.disabled = false; btn.className = 'text-purple-500 text-xs' }, 8000)
       }
 
       const dailyMax = computed(() => Math.max(1, ...dailyTrend.value.map(d=>(d.successRequests||0)+(d.failedRequests||0))))
